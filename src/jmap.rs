@@ -27,26 +27,21 @@ impl JmapEndpoint {
     }
 
     pub(crate) async fn connect(self) -> Result<JmapEndpointClient> {
-        let mut jec = JmapEndpointClient::new(self);
-        jec.connect().await?;
-        Ok(jec)
+        JmapEndpointClient::connect(self).await
     }
 }
 
 pub(crate) struct JmapEndpointClient {
-    je: JmapEndpoint,
+    client: Client,
+    inbox_id: String,
 }
 
 impl JmapEndpointClient {
-    fn new(je: JmapEndpoint) -> JmapEndpointClient {
-        JmapEndpointClient { je }
-    }
-
-    async fn connect(&mut self) -> Result<()> {
+    pub(crate) async fn connect(je: JmapEndpoint) -> Result<JmapEndpointClient> {
         println!("[jmap] conectando ...");
         let client = Client::new()
-            .credentials(&*self.je.bearer)
-            .connect(&self.je.url)
+            .credentials(&*je.bearer)
+            .connect(&je.url)
             .await?;
 
         println!("[jmap] buscando INBOX ...");
@@ -60,17 +55,22 @@ impl JmapEndpointClient {
             .pop()
             .context("xyz")?;
 
-        // let mailbox = client.mailbox_get(inbox_id, None::<Vec<_>>).await?;
-        // println!("[jmap] {:?}", mailbox);
+        Ok(JmapEndpointClient { client, inbox_id })
+    }
+}
 
+#[async_trait]
+impl endpoint::EndpointReader for JmapEndpointClient {
+    async fn first(&mut self) -> Result<Option<Vec<u8>>> {
         println!(
             "[jmap] buscando correos nuevos de buzón con id {:?} ...",
-            inbox_id
+            self.inbox_id
         );
 
-        let email_ids = client
+        let email_ids = self
+            .client
             .email_query(
-                email::query::Filter::in_mailbox(&inbox_id).into(),
+                email::query::Filter::in_mailbox(&self.inbox_id).into(),
                 [email::query::Comparator::received_at().ascending()].into(),
             )
             .await?
@@ -78,28 +78,35 @@ impl JmapEndpointClient {
 
         println!("[jmap] encontré {} nuevo(s) correo(s).", email_ids.len());
 
-        Ok(())
+        for email_id in &email_ids {
+            let email = self
+                .client
+                .email_get(
+                    email_id,
+                    [
+                        email::Property::TextBody,
+                        email::Property::HtmlBody,
+                        email::Property::BodyValues,
+                        email::Property::Header(email::Header.parse("header::all")
+                    ]
+                    .into(),
+                )
+                .await?
+                .context("mensaje no encontrado")?;
+            println!("email: {:?}", email);
+
+            dump_email(0, email.body_structure().context("missing structure")?);
+        }
+
+        Ok(Some("".into()))
     }
 }
 
-#[async_trait]
-impl endpoint::EndpointReader for JmapEndpointClient {
-    async fn first(&mut self) -> Result<Vec<u8>> {
-        Ok(concat!(r#"<?xml version="1.0" encoding="UTF-8"?>"#,
-            r#"<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">"#,
-            r#"<plist version="1.0">"#,
-            r#"<dict>"#,
-            r#"	<key>conversation-id</key>"#,
-            r#"	<integer>37045</integer>"#,
-            r#"	<key>date-last-viewed</key>"#,
-            r#"	<integer>1694069867</integer>"#,
-            r#"	<key>date-received</key>"#,
-            r#"	<integer>1594069740</integer>"#,
-            r#"	<key>flags</key>"#,
-            r#"	<integer>2983488513</integer>"#,
-            r#"	<key>remote-id</key>"#,
-            r#"	<string>11</string>"#,
-            r#"</dict>"#,
-            r#"</plist>"#).into())
+fn dump_email(level: u8, part: &email::EmailBodyPart) {
+    println!("{} {:?}", level, part);
+    if let Some(sub_parts) = part.sub_parts() {
+        for sub_part in sub_parts {
+            dump_email(level + 1, sub_part);
+        }
     }
 }

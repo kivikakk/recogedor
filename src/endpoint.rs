@@ -46,7 +46,7 @@ impl Endpoint {
 
 #[async_trait]
 pub(crate) trait EndpointReader {
-    async fn first(&mut self) -> Result<Vec<u8>>;
+    async fn first(&mut self) -> Result<Option<Vec<u8>>>;
 }
 #[async_trait]
 pub(crate) trait EndpointWriter {

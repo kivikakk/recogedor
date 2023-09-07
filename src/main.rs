@@ -28,7 +28,7 @@ async fn main() -> Result<()> {
     println!("config leída con éxito");
 
     println!("comprobando src / dest ...");
-    // println!("checking dest");
+    // println!("comprobando dest");
     let s = src.connect_reader();
     let d = dest.connect_writer();
     let (sr, dr) = join!(s, d);
@@ -36,7 +36,12 @@ async fn main() -> Result<()> {
     // dr?.append().await?;
 
     let mail = sr?.first().await?;
-    dr?.append(&mail).await?;
+    if let Some(mail) = mail {
+        println!("copiando ...");
+        dr?.append(&mail).await?;
+    } else {
+        println!("nada que hacer");
+    }
     println!("hecho");
 
     Ok(())
