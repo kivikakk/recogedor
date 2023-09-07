@@ -1,0 +1,9 @@
+[src.jmap]
+url = "https://api.fastmail.com/jmap/session"
+bearer = "blah"
+
+[dest.imap]
+host = "localhost"
+port = 993
+user = "abc@def.com"
+pass = "blah"

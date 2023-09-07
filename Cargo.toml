@@ -1,0 +1,14 @@
+[package]
+name = "recogedor"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+jmap-client = "0.3"
+toml = "0.7"
+async-imap = { version = "0.9", default-features = false, features = ["runtime-tokio"] }
+async-native-tls = { version = "0.5", default-features = false, features = ["runtime-tokio"] }
+anyhow = "1"
+futures = "0.3"
+async-trait = "0.1"
