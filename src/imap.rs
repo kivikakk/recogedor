@@ -74,6 +74,13 @@ impl ImapEndpointClient {
 }
 
 #[async_trait]
+impl endpoint::EndpointReader for ImapEndpointClient {
+    async fn first(&mut self) -> Result<Option<Vec<u8>>> {
+        println!("buscando correos nuevos de buzón INBOX ...");
+    }
+}
+
+#[async_trait]
 impl endpoint::EndpointWriter for ImapEndpointClient {
     async fn append(&mut self, content: &[u8]) -> Result<()> {
         println!("[imap] adjuntando mensaje ...");

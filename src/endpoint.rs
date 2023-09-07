@@ -2,11 +2,9 @@ use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
 
 use crate::imap::ImapEndpoint;
-use crate::jmap::JmapEndpoint;
 
 pub(crate) enum Endpoint {
     Imap(ImapEndpoint),
-    Jmap(JmapEndpoint),
 }
 
 impl Endpoint {
@@ -15,21 +13,18 @@ impl Endpoint {
             .with_context(|| format!("falta {} ", which))?
             .as_table()
             .with_context(|| format!("{} no es tabla", which))?;
-        let ep = match (table.get("imap"), table.get("jmap")) {
-            (None, None) => bail!("se esperaba imap o jmap para {}, ninguno dadon", which),
-            (Some(_), Some(_)) => bail!("se esperaba imap o jmap para {}, ambos dados", which),
-            (Some(im), None) => Endpoint::Imap(ImapEndpoint::from_config(im)?),
-            (None, Some(jm)) => Endpoint::Jmap(JmapEndpoint::from_config(jm)?),
+        let ep = match (table.get("imap"), ) {
+            (None,) => bail!("se esperaba imap para {}, ninguno dadon", which),
+            (Some(im), ) => Endpoint::Imap(ImapEndpoint::from_config(im)?),
         };
         Ok(ep)
     }
 
     pub(crate) async fn connect_reader(self) -> Result<Box<dyn EndpointReader>> {
         match self {
-            Endpoint::Imap(_) => bail!("aún no hay lector IMAP"),
-            Endpoint::Jmap(je) => {
-                let jec = je.connect().await?;
-                Ok(Box::new(jec))
+            Endpoint::Imap(ie) => {
+                let iec = ie.connect().await?;
+                Ok(Box::new(iec))
             }
         }
     }
@@ -39,7 +34,6 @@ impl Endpoint {
                 let iec = ie.connect().await?;
                 Ok(Box::new(iec))
             }
-            Endpoint::Jmap(_) => bail!("aún no hay escritor JMAP"),
         }
     }
 }
