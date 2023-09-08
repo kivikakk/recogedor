@@ -30,6 +30,7 @@
         devShells.production = pkgs.mkShell {
           buildInputs = builtins.attrValues {
             rust = pkgs.rust-bin.stable.latest.default;
+            inherit (pkgs) openssl;
           };
         };
       });
