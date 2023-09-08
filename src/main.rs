@@ -38,17 +38,13 @@ async fn main() -> Result<()> {
     loop {
         sr.idle().await?;
 
-        println!("leyendo ...");
         for mail in sr.read().await? {
             if mail.flagged {
                 println!("ya copiado, saltando ...");
             } else {
-                println!("copiando ...");
                 dr.append(&mail).await?;
-                println!("marcado copiado ...");
                 sr.flag(mail.uid).await?;
             }
         }
-        println!("hecho");
     }
 }

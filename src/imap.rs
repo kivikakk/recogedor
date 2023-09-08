@@ -1,5 +1,9 @@
 use crate::endpoint;
 use anyhow::{Context, Result};
+use async_imap::{
+    extensions::idle::IdleResponse,
+    imap_proto::types::{MailboxDatum, Response},
+};
 use async_trait::async_trait;
 use futures::TryStreamExt;
 use tokio::net::TcpStream;
@@ -92,13 +96,29 @@ impl endpoint::EndpointReader for ImapEndpointClient {
     }
 
     async fn idle(&mut self) -> Result<()> {
-        println!("[{}] comenzando inactivo ...", self.name);
+        println!("[{}] comenzando IDLE ...", self.name);
         let imap_session = self.imap_session.take().context("sin sesión imap")?;
         let mut idle = imap_session.idle();
         idle.init().await?;
-        let (idle_wait, _interrupt) = idle.wait();
+
         println!("[{}] comenzó.", self.name);
-        let _idle_result = idle_wait.await?;
+        'idle: loop {
+            let (idle_wait, _interrupt) = idle.wait();
+            println!("[{}] espera ...", self.name);
+
+            let idle_result = idle_wait.await?;
+            if let IdleResponse::NewData(data) = idle_result {
+                let parsed = data.parsed();
+                println!("[{}] {:?}", self.name, parsed);
+                match parsed {
+                    &Response::MailboxData(MailboxDatum::Exists(n)) => {
+                        println!("[{}] tiene EXISTS: {}", self.name, n);
+                        break 'idle;
+                    }
+                    _ => {}
+                }
+            }
+        }
 
         // Don't even check what it is. Do the boogie.
 
@@ -110,6 +130,7 @@ impl endpoint::EndpointReader for ImapEndpointClient {
 
     async fn read(&mut self) -> Result<Vec<endpoint::Message>> {
         let imap_session = self.imap_session.as_mut().context("sin sesión imap")?;
+        println!("[{}] leyendo ...", self.name);
         let messages_stream = imap_session.fetch("1:*", "(UID FLAGS RFC822)").await?;
         let messages: Vec<_> = messages_stream.try_collect().await?;
 
@@ -123,6 +144,7 @@ impl endpoint::EndpointReader for ImapEndpointClient {
 
     async fn flag(&mut self, uid: u32) -> Result<()> {
         let imap_session = self.imap_session.as_mut().context("sin sesión imap")?;
+        println!("[{}] marcado copiado ...", self.name);
         let updates_stream = imap_session
             .uid_store(format!("{}", uid), "+FLAGS (Recogido)")
             .await?;
