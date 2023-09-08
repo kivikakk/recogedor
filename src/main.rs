@@ -36,8 +36,6 @@ async fn main() -> Result<()> {
     sr.inbox().await?;
 
     loop {
-        sr.idle().await?;
-
         for mail in sr.read().await? {
             if mail.flagged {
                 println!("ya copiado, saltando ...");
@@ -46,5 +44,7 @@ async fn main() -> Result<()> {
                 sr.flag(mail.uid).await?;
             }
         }
+
+        sr.idle().await?;
     }
 }
