@@ -1,9 +1,11 @@
 use crate::endpoint;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
+use futures::TryStreamExt;
 use tokio::net::TcpStream;
 
 pub(crate) struct ImapEndpoint {
+    name: String,
     host: String,
     port: u16,
     user: String,
@@ -11,34 +13,37 @@ pub(crate) struct ImapEndpoint {
 }
 
 impl ImapEndpoint {
-    pub(crate) fn from_config(value: &toml::Value) -> Result<ImapEndpoint> {
-        let table = value.as_table().context("imap no es tabla")?;
+    pub(crate) fn from_config(name: &str, value: &toml::Value) -> Result<ImapEndpoint> {
+        let table = value
+            .as_table()
+            .with_context(|| format!("imap {} no es tabla", name))?;
         let host = table
             .get("host")
-            .context("falta el host imap")?
+            .with_context(|| format!("falta el host imap {}", name))?
             .as_str()
-            .context("el host imap no es una cadena")?
+            .with_context(|| format!("el host imap {} no es una cadena", name))?
             .to_string();
         let port = table
             .get("port")
-            .context("falta el pureto imap")?
+            .with_context(|| format!("falta el pureto imap {}", name))?
             .as_integer()
-            .context("el pureto imap no es entero")?
+            .with_context(|| format!("el pureto imap {} no es entero", name))?
             .try_into()
-            .context("el puero imap no está dentro del alcance")?;
+            .with_context(|| format!("el puero imap {} no está dentro del alcance", name))?;
         let user = table
             .get("user")
-            .context("falta el usuario imap")?
+            .with_context(|| format!("falta el usuario imap {}", name))?
             .as_str()
-            .context("el usuario imap no es una cadena")?
+            .with_context(|| format!("el usuario imap {} no es una cadena", name))?
             .to_string();
         let pass = table
             .get("pass")
-            .context("falta la contraseña imap")?
+            .with_context(|| format!("falta la contraseña imap {}", name))?
             .as_str()
-            .context("la contraseña imap no es una cadena")?
+            .with_context(|| format!("la contraseña imap {} no es una cadena", name))?
             .to_string();
         Ok(ImapEndpoint {
+            name: name.to_string(),
             host,
             port,
             user,
@@ -52,38 +57,85 @@ impl ImapEndpoint {
 }
 
 pub(crate) struct ImapEndpointClient {
-    imap_session: async_imap::Session<async_native_tls::TlsStream<TcpStream>>,
+    name: String,
+    imap_session: Option<async_imap::Session<async_native_tls::TlsStream<TcpStream>>>,
 }
 
 impl ImapEndpointClient {
     async fn connect(ie: ImapEndpoint) -> Result<ImapEndpointClient> {
-        println!("[imap] conectando tcp ...");
+        println!("[{}] conectando tcp ...", ie.name);
         let tcp_stream = TcpStream::connect((&*ie.host, ie.port)).await?;
         let tls = async_native_tls::TlsConnector::new();
-        println!("[imap] conectando tls ...");
+        println!("[{}] conectando tls ...", ie.name);
         let tls_stream = tls.connect(&*ie.host, tcp_stream).await?;
 
-        println!("[imap] conectando imap ...");
+        println!("[{}] conectando imap ...", ie.name);
         let client = async_imap::Client::new(tls_stream);
-        println!("[imap] iniciando sesión ...");
-        let imap_session = client.login(&*ie.user, &*ie.pass).await.map_err(|e| e.0)?;
-        println!("[imap] (voz hacker) estoy dentro");
+        println!("[{}] iniciando sesión ...", ie.name);
+        let imap_session = Some(client.login(&*ie.user, &*ie.pass).await.map_err(|e| e.0)?);
+        println!("[{}] (voz hacker) estoy dentro", ie.name);
 
-        Ok(ImapEndpointClient { imap_session })
+        Ok(ImapEndpointClient {
+            name: ie.name,
+            imap_session,
+        })
     }
 }
 
 #[async_trait]
 impl endpoint::EndpointReader for ImapEndpointClient {
-    async fn first(&mut self) -> Result<Option<Vec<u8>>> {
-        println!("buscando correos nuevos de buzón INBOX ...");
+    async fn inbox(&mut self) -> Result<()> {
+        let imap_session = self.imap_session.as_mut().context("sin sesión imap")?;
+        println!("[{}] buscando correos nuevos de buzón INBOX ...", self.name);
+        imap_session.select("INBOX").await?;
+        Ok(())
+    }
+
+    async fn idle(&mut self) -> Result<()> {
+        println!("[{}] comenzando inactivo ...", self.name);
+        let imap_session = self.imap_session.take().context("sin sesión imap")?;
+        let mut idle = imap_session.idle();
+        idle.init().await?;
+        let (idle_wait, _interrupt) = idle.wait();
+        println!("[{}] comenzó.", self.name);
+        let _idle_result = idle_wait.await?;
+
+        // Don't even check what it is. Do the boogie.
+
+        println!("[{}] despierto!", self.name);
+        let imap_session = idle.done().await?;
+        _ = self.imap_session.insert(imap_session);
+        Ok(())
+    }
+
+    async fn read(&mut self) -> Result<Vec<endpoint::Message>> {
+        let imap_session = self.imap_session.as_mut().context("sin sesión imap")?;
+        let messages_stream = imap_session.fetch("1:*", "(UID FLAGS RFC822)").await?;
+        let messages: Vec<_> = messages_stream.try_collect().await?;
+
+        let mut result: Vec<endpoint::Message> = vec![];
+        for message in &messages {
+            result.push(message.try_into()?);
+        }
+
+        Ok(result)
+    }
+
+    async fn flag(&mut self, uid: u32) -> Result<()> {
+        let imap_session = self.imap_session.as_mut().context("sin sesión imap")?;
+        let updates_stream = imap_session
+            .uid_store(format!("{}", uid), "+FLAGS (Recogido)")
+            .await?;
+        let _updates: Vec<_> = updates_stream.try_collect().await?;
+        Ok(())
     }
 }
 
 #[async_trait]
 impl endpoint::EndpointWriter for ImapEndpointClient {
-    async fn append(&mut self, content: &[u8]) -> Result<()> {
-        println!("[imap] adjuntando mensaje ...");
-        Ok(self.imap_session.append("INBOX", content).await?)
+    async fn append(&mut self, message: &endpoint::Message) -> Result<()> {
+        let imap_session = self.imap_session.as_mut().context("sin sesión imap")?;
+        println!("[{}] adjuntando mensaje ...", self.name);
+        Ok(imap_session.append("INBOX", &message.body).await?)
     }
 }

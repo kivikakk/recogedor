@@ -5,7 +5,6 @@ use toml::Table;
 
 mod endpoint;
 mod imap;
-mod jmap;
 
 use endpoint::Endpoint;
 
@@ -27,22 +26,29 @@ async fn main() -> Result<()> {
 
     println!("config leída con éxito");
 
-    println!("comprobando src / dest ...");
-    // println!("comprobando dest");
+    println!("comprobando src y dest ...");
     let s = src.connect_reader();
     let d = dest.connect_writer();
     let (sr, dr) = join!(s, d);
-    // let (dr,) = join!(d);
-    // dr?.append().await?;
 
-    let mail = sr?.first().await?;
-    if let Some(mail) = mail {
-        println!("copiando ...");
-        dr?.append(&mail).await?;
-    } else {
-        println!("nada que hacer");
+    let (mut sr, mut dr) = (sr?, dr?);
+
+    sr.inbox().await?;
+
+    loop {
+        sr.idle().await?;
+
+        println!("leyendo ...");
+        for mail in sr.read().await? {
+            if mail.flagged {
+                println!("ya copiado, saltando ...");
+            } else {
+                println!("copiando ...");
+                dr.append(&mail).await?;
+                println!("marcado copiado ...");
+                sr.flag(mail.uid).await?;
+            }
+        }
+        println!("hecho");
     }
-    println!("hecho");
-
-    Ok(())
 }
