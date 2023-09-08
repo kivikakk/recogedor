@@ -26,5 +26,11 @@
             inherit (pkgs) rust-analyzer lldb_16 openssl;
           };
         };
+
+        devShells.production = pkgs.mkShell {
+          buildInputs = builtins.attrValues {
+            rust = pkgs.rust-bin.stable.latest.default;
+          };
+        };
       });
 }
