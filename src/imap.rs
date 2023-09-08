@@ -125,12 +125,9 @@ impl endpoint::EndpointReader for ImapEndpointClient {
             if let IdleResponse::NewData(data) = idle_result {
                 let parsed = data.parsed();
                 println!("[{}] {:?}", self.name, parsed);
-                match parsed {
-                    &Response::MailboxData(MailboxDatum::Exists(n)) => {
-                        println!("[{}] tiene EXISTS: {}", self.name, n);
-                        break 'idle;
-                    }
-                    _ => {}
+                if let &Response::MailboxData(MailboxDatum::Exists(n)) = parsed {
+                    println!("[{}] tiene EXISTS: {}", self.name, n);
+                    break 'idle;
                 }
             }
         }
