@@ -11,6 +11,7 @@ use tokio::net::TcpStream;
 pub(crate) struct ImapEndpoint {
     name: String,
     host: String,
+    ip: Option<String>,
     port: u16,
     user: String,
     pass: String,
@@ -27,6 +28,14 @@ impl ImapEndpoint {
             .as_str()
             .with_context(|| format!("el host imap {} no es una cadena", name))?
             .to_string();
+        let ip = match table.get("ip") {
+            Some(v) => Some(
+                v.as_str()
+                    .with_context(|| format!("el ip imap {} no es una cadena", name))?
+                    .to_string(),
+            ),
+            None => None,
+        };
         let port = table
             .get("port")
             .with_context(|| format!("falta el pureto imap {}", name))?
@@ -49,6 +58,7 @@ impl ImapEndpoint {
         Ok(ImapEndpoint {
             name: name.to_string(),
             host,
+            ip,
             port,
             user,
             pass,
@@ -68,7 +78,12 @@ pub(crate) struct ImapEndpointClient {
 impl ImapEndpointClient {
     async fn connect(ie: ImapEndpoint) -> Result<ImapEndpointClient> {
         println!("[{}] conectando tcp ...", ie.name);
-        let tcp_stream = TcpStream::connect((&*ie.host, ie.port)).await?;
+        let addr = if let Some(ref ip) = ie.ip {
+            (ip.as_ref(), ie.port)
+        } else {
+            (&*ie.host, ie.port)
+        };
+        let tcp_stream = TcpStream::connect(addr).await?;
         let tls = async_native_tls::TlsConnector::new();
         println!("[{}] conectando tls ...", ie.name);
         let tls_stream = tls.connect(&*ie.host, tcp_stream).await?;
