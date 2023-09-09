@@ -2,10 +2,11 @@ use crate::endpoint;
 use anyhow::{Context, Result};
 use async_imap::{
     extensions::idle::IdleResponse,
-    imap_proto::types::{MailboxDatum, Response},
+    imap_proto::types::{MailboxDatum, Response, Status},
 };
 use async_trait::async_trait;
 use futures::TryStreamExt;
+use std::time::Duration;
 use tokio::net::TcpStream;
 
 pub(crate) struct ImapEndpoint {
@@ -110,39 +111,49 @@ impl endpoint::EndpointReader for ImapEndpointClient {
         Ok(())
     }
 
-    async fn idle(&mut self) -> Result<()> {
+    async fn idle(&mut self) -> Result<endpoint::IdleResult> {
         println!("[{}] comenzando IDLE ...", self.name);
         let imap_session = self.imap_session.take().context("sin sesión imap")?;
         let mut idle = imap_session.idle();
         idle.init().await?;
 
         println!("[{}] comenzó.", self.name);
-        'idle: loop {
-            let (idle_wait, _interrupt) = idle.wait();
+        let ir = 'idle: loop {
+            let (idle_wait, _interrupt) = idle.wait_with_timeout(Duration::from_secs(10 * 60));
             println!("[{}] espera ...", self.name);
 
             match idle_wait.await? {
-                IdleResponse::NewData(data) => {
-                    let parsed = data.parsed();
-                    println!("[{}] {:?}", self.name, parsed);
-                    if let &Response::MailboxData(MailboxDatum::Exists(n)) = parsed {
+                IdleResponse::NewData(data) => match &data.parsed() {
+                    Response::MailboxData(MailboxDatum::Exists(n)) => {
                         println!("[{}] tiene EXISTS: {}", self.name, n);
-                        break 'idle;
+                        break 'idle endpoint::IdleResult::Exists;
                     }
+                    Response::Data {
+                        status: Status::Bye,
+                        ..
+                    } => {
+                        println!("[{}] given Bye", self.name);
+                        return Ok(endpoint::IdleResult::ReConnect);
+                    }
+                    parsed => {
+                        println!("[{}] ignoring unknown: {:?}", self.name, parsed);
+                    }
+                },
+                IdleResponse::Timeout => {
+                    println!("[{}] got our timeout", self.name);
+                    break 'idle endpoint::IdleResult::ReIdle;
                 }
                 other => {
                     println!("[{}] got other idle: {:?}", self.name, other);
-                    break 'idle;
+                    return Ok(endpoint::IdleResult::ReConnect);
                 }
             }
-        }
-
-        // Don't even check what it is. Do the boogie.
+        };
 
         println!("[{}] despierto!", self.name);
         let imap_session = idle.done().await?;
         _ = self.imap_session.insert(imap_session);
-        Ok(())
+        Ok(ir)
     }
 
     async fn read(&mut self) -> Result<Vec<endpoint::Message>> {

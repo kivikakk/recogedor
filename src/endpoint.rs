@@ -60,10 +60,16 @@ impl std::convert::TryFrom<&async_imap::types::Fetch> for Message {
     }
 }
 
+pub(crate) enum IdleResult {
+    Exists,
+    ReIdle,
+    ReConnect,
+}
+
 #[async_trait]
 pub(crate) trait EndpointReader {
     async fn inbox(&mut self) -> Result<()>;
-    async fn idle(&mut self) -> Result<()>;
+    async fn idle(&mut self) -> Result<IdleResult>;
     async fn read(&mut self) -> Result<Vec<Message>>;
     async fn flag(&mut self, uid: u32) -> Result<()>;
 }
