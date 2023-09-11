@@ -3,21 +3,25 @@ use async_trait::async_trait;
 
 use crate::imap::ImapEndpoint;
 
+#[derive(Clone)]
 pub(crate) enum Endpoint {
     Imap(ImapEndpoint),
 }
 
 impl Endpoint {
-    pub(crate) fn from_config(which: &str, value: Option<&toml::Value>) -> Result<Self> {
+    pub(crate) fn from_config(which: &str, value: &toml::Value) -> Result<Self> {
         let table = value
-            .with_context(|| format!("falta {} ", which))?
             .as_table()
             .with_context(|| format!("{} no es tabla", which))?;
-        let ep = match (table.get("imap"),) {
-            (None,) => bail!("se esperaba imap para {}, ninguno dadon", which),
-            (Some(im),) => Endpoint::Imap(ImapEndpoint::from_config(which, im)?),
-        };
-        Ok(ep)
+        let tipo = table
+            .get("type")
+            .with_context(|| format!("la config para {} no hay tipo", which))?
+            .as_str()
+            .with_context(|| format!("el tipo de la config para {} no es una cadena", which))?;
+        if tipo != "imap" {
+            bail!("no sé este tipo {}", tipo);
+        }
+        Ok(Endpoint::Imap(ImapEndpoint::from_config(which, table)?))
     }
 
     pub(crate) async fn connect_reader(&self) -> Result<Box<dyn EndpointReader>> {

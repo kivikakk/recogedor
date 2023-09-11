@@ -9,6 +9,7 @@ use futures::TryStreamExt;
 use std::time::Duration;
 use tokio::net::TcpStream;
 
+#[derive(Clone)]
 pub(crate) struct ImapEndpoint {
     name: String,
     host: String,
@@ -19,10 +20,7 @@ pub(crate) struct ImapEndpoint {
 }
 
 impl ImapEndpoint {
-    pub(crate) fn from_config(name: &str, value: &toml::Value) -> Result<ImapEndpoint> {
-        let table = value
-            .as_table()
-            .with_context(|| format!("imap {} no es tabla", name))?;
+    pub(crate) fn from_config(name: &str, table: &toml::Table) -> Result<ImapEndpoint> {
         let host = table
             .get("host")
             .with_context(|| format!("falta el host imap {}", name))?

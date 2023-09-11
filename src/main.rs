@@ -1,38 +1,35 @@
 use anyhow::{Context, Result};
-use std::fs;
-use toml::Table;
+use futures::future::try_join_all;
 
+mod config;
 mod endpoint;
 mod imap;
 
-use endpoint::{Endpoint, EndpointWriter};
-
-fn endpoints_from_config(config: &str) -> Result<(Endpoint, Endpoint)> {
-    let table = config
-        .parse::<Table>()
-        .context("no se pudo analizar la config")?;
-    Ok((
-        Endpoint::from_config("src", table.get("src"))?,
-        Endpoint::from_config("dest", table.get("dest"))?,
-    ))
-}
+use config::Job;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let (cfg_src, cfg_dest) = endpoints_from_config(
-        &fs::read_to_string("config.toml").context("no se pudo leer config.toml")?,
-    )?;
-
+    let jobs = config::from_file("config.toml").context("leyando config.toml")?;
     println!("config leída con éxito");
 
-    println!("comprobando src ...");
+    let mut futs = vec![];
+    for (name, job) in &jobs {
+        futs.push(run_job(name, job));
+    }
 
-    let mut src = cfg_src.connect_reader().await?;
+    try_join_all(futs).await?;
+    Ok(())
+}
+
+async fn run_job(name: &str, job: &Job) -> Result<()> {
+    println!("[{}] comprobando src ...", name);
+
+    let mut src = job.src.connect_reader().await?;
 
     src.inbox().await?;
 
     loop {
-        let mut dest: Option<Box<dyn EndpointWriter>> = None;
+        let mut dest: Option<Box<dyn endpoint::EndpointWriter>> = None;
 
         for mail in src.read().await? {
             if mail.flagged {
@@ -40,7 +37,7 @@ async fn main() -> Result<()> {
             } else {
                 let d = match dest {
                     Some(ref mut d) => d,
-                    None => dest.insert(cfg_dest.connect_writer().await?),
+                    None => dest.insert(job.dest.connect_writer().await?),
                 };
                 d.append(&mail).await?;
                 src.flag(mail.uid).await?;

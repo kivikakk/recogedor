@@ -1,1 +1,2 @@
-Is there a race condition where we miss an unsolicited EXISTS?
+* Is there a race condition where we miss an unsolicited EXISTS?
+* Actually handle disconnects and not just by exiting
