@@ -1,12 +1,11 @@
 use anyhow::{Context, Result};
-use futures::join;
 use std::fs;
 use toml::Table;
 
 mod endpoint;
 mod imap;
 
-use endpoint::Endpoint;
+use endpoint::{Endpoint, EndpointWriter};
 
 fn endpoints_from_config(config: &str) -> Result<(Endpoint, Endpoint)> {
     let table = config
@@ -20,31 +19,38 @@ fn endpoints_from_config(config: &str) -> Result<(Endpoint, Endpoint)> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let (src, dest) = endpoints_from_config(
+    let (cfg_src, cfg_dest) = endpoints_from_config(
         &fs::read_to_string("config.toml").context("no se pudo leer config.toml")?,
     )?;
 
     println!("config leída con éxito");
 
-    println!("comprobando src y dest ...");
-    let s = src.connect_reader();
-    let d = dest.connect_writer();
-    let (sr, dr) = join!(s, d);
+    println!("comprobando src ...");
 
-    let (mut sr, mut dr) = (sr?, dr?);
+    let mut src = cfg_src.connect_reader().await?;
 
-    sr.inbox().await?;
+    src.inbox().await?;
 
     loop {
-        for mail in sr.read().await? {
+        let mut dest: Option<Box<dyn EndpointWriter>> = None;
+
+        for mail in src.read().await? {
             if mail.flagged {
                 println!("ya copiado, saltando ...");
             } else {
-                dr.append(&mail).await?;
-                sr.flag(mail.uid).await?;
+                let d = match dest {
+                    Some(ref mut d) => d,
+                    None => dest.insert(cfg_dest.connect_writer().await?),
+                };
+                d.append(&mail).await?;
+                src.flag(mail.uid).await?;
             }
         }
 
-        sr.idle().await?;
+        if let Some(mut d) = dest {
+            d.disconnect().await?;
+        }
+
+        src.idle().await?;
     }
 }

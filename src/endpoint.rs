@@ -20,7 +20,7 @@ impl Endpoint {
         Ok(ep)
     }
 
-    pub(crate) async fn connect_reader(self) -> Result<Box<dyn EndpointReader>> {
+    pub(crate) async fn connect_reader(&self) -> Result<Box<dyn EndpointReader>> {
         match self {
             Endpoint::Imap(ie) => {
                 let iec = ie.connect().await?;
@@ -28,7 +28,7 @@ impl Endpoint {
             }
         }
     }
-    pub(crate) async fn connect_writer(self) -> Result<Box<dyn EndpointWriter>> {
+    pub(crate) async fn connect_writer(&self) -> Result<Box<dyn EndpointWriter>> {
         match self {
             Endpoint::Imap(ie) => {
                 let iec = ie.connect().await?;
@@ -76,4 +76,5 @@ pub(crate) trait EndpointReader {
 #[async_trait]
 pub(crate) trait EndpointWriter {
     async fn append(&mut self, message: &Message) -> Result<()>;
+    async fn disconnect(&mut self) -> Result<()>;
 }

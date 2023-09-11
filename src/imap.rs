@@ -66,8 +66,8 @@ impl ImapEndpoint {
         })
     }
 
-    pub(crate) async fn connect(self) -> Result<ImapEndpointClient> {
-        ImapEndpointClient::connect(self).await
+    pub(crate) async fn connect(&self) -> Result<ImapEndpointClient> {
+        ImapEndpointClient::connect(&self).await
     }
 }
 
@@ -77,7 +77,7 @@ pub(crate) struct ImapEndpointClient {
 }
 
 impl ImapEndpointClient {
-    async fn connect(ie: ImapEndpoint) -> Result<ImapEndpointClient> {
+    async fn connect(ie: &ImapEndpoint) -> Result<ImapEndpointClient> {
         println!("[{}] conectando tcp ...", ie.name);
         let addr = if let Some(ref ip) = ie.ip {
             (ip.as_ref(), ie.port)
@@ -96,7 +96,7 @@ impl ImapEndpointClient {
         println!("[{}] (voz hacker) estoy dentro", ie.name);
 
         Ok(ImapEndpointClient {
-            name: ie.name,
+            name: ie.name.clone(),
             imap_session,
         })
     }
@@ -187,5 +187,10 @@ impl endpoint::EndpointWriter for ImapEndpointClient {
         let imap_session = self.imap_session.as_mut().context("sin sesión imap")?;
         println!("[{}] adjuntando mensaje ...", self.name);
         Ok(imap_session.append("INBOX", &message.body).await?)
+    }
+
+    async fn disconnect(&mut self) -> Result<()> {
+        let imap_session = self.imap_session.as_mut().context("sin sesión imap")?;
+        Ok(imap_session.close().await?)
     }
 }
