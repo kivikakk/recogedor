@@ -189,6 +189,6 @@ impl endpoint::EndpointWriter for ImapEndpointClient {
 
     async fn disconnect(&mut self) -> Result<()> {
         let imap_session = self.imap_session.as_mut().context("sin sesión imap")?;
-        Ok(imap_session.close().await?)
+        Ok(imap_session.logout().await?)
     }
 }
