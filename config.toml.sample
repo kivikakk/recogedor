@@ -1,9 +1,33 @@
-[src.jmap]
-url = "https://api.fastmail.com/jmap/session"
-bearer = "blah"
+[jobs]
+fox = { src = "fm-fox", dest = "my-fox" }
+wolf = { src = "fm-wolf", dest = "my-wolf" }
 
-[dest.imap]
-host = "localhost"
+[endpoints.fm-fox]
+type = "imap"
+host = "imap.fastmail.com"
 port = 993
-user = "abc@def.com"
-pass = "blah"
+user = "fox@den.com"
+pass = "abc123"
+
+[endpoints.fm-wolf]
+type = "imap"
+host = "imap.fastmail.com"
+port = 993
+user = "wolf@den.com"
+pass = "def456"
+
+[endpoints.my-fox]
+type = "imap"
+host = "my.mx.com"
+ip = "127.0.0.1"
+port = 993
+user = "fox@den.com"
+pass = "ghi789"
+
+[endpoints.my-wolf]
+type = "imap"
+host = "my.mx.com"
+ip = "127.0.0.1"
+port = 993
+user = "wolf@den.com"
+pass = "jkl012"
