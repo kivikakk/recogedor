@@ -6,6 +6,7 @@ mod endpoint;
 mod imap;
 
 use config::Job;
+use endpoint::IdleResult;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -21,7 +22,7 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn run_job(name: &str, job: &Job) -> Result<()> {
+async fn prep_src(name: &str, job: &Job) -> Result<Box<dyn endpoint::EndpointReader>> {
     let mut src = job
         .src
         .connect_reader()
@@ -31,6 +32,12 @@ async fn run_job(name: &str, job: &Job) -> Result<()> {
     src.inbox()
         .await
         .with_context(|| format!("inboxing {}", name))?;
+
+    Ok(src)
+}
+
+async fn run_job(name: &str, job: &Job) -> Result<()> {
+    let mut src = prep_src(name, job).await?;
 
     loop {
         let mut dest: Option<Box<dyn endpoint::EndpointWriter>> = None;
@@ -67,8 +74,19 @@ async fn run_job(name: &str, job: &Job) -> Result<()> {
                 .with_context(|| format!("disconnecting {}", name))?;
         }
 
-        src.idle()
-            .await
-            .with_context(|| format!("idling {}", name))?;
+        'idle: loop {
+            match src
+                .idle()
+                .await
+                .with_context(|| format!("idling {}", name))?
+            {
+                IdleResult::Exists => break 'idle,
+                IdleResult::ReIdle => continue 'idle,
+                IdleResult::ReConnect => {
+                    src = prep_src(name, job).await?;
+                    break 'idle;
+                }
+            }
+        }
     }
 }
