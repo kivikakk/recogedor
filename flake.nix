@@ -27,12 +27,15 @@
 
         nativeBuildInputs = [
           pkgs.pkg-config
-          pkgs.openssl
         ];
 
-        buildInputs = pkgs.lib.optionals (pkgs.stdenv.isDarwin) [
-          pkgs.darwin.apple_sdk.frameworks.Security
-        ];
+        buildInputs =
+          [
+            pkgs.openssl
+          ]
+          ++ pkgs.lib.optionals (pkgs.stdenv.isDarwin) [
+            pkgs.darwin.apple_sdk.frameworks.Security
+          ];
       };
 
       devShells.default = pkgs.mkShell {
