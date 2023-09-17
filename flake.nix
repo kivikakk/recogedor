@@ -9,12 +9,14 @@
   }:
     flake-utils.lib.eachDefaultSystem (system: let
       pkgs = import nixpkgs {inherit system;};
+      inherit (pkgs) lib;
+      cargoToml = lib.importTOML ./Cargo.toml;
     in rec {
       formatter = pkgs.alejandra;
 
       packages.default = pkgs.rustPlatform.buildRustPackage {
-        pname = "recogedor";
-        version = "0.0.1";
+        pname = cargoToml.package.name;
+        version = cargoToml.package.version;
         src = ./.;
 
         cargoLock.lockFile = ./Cargo.lock;
@@ -27,7 +29,7 @@
           [
             pkgs.openssl
           ]
-          ++ pkgs.lib.optionals (pkgs.stdenv.isDarwin) [
+          ++ lib.optionals (pkgs.stdenv.isDarwin) [
             pkgs.darwin.apple_sdk.frameworks.Security
           ];
       };
