@@ -12,3 +12,5 @@ anyhow = "1"
 futures = "0.3"
 async-trait = "0.1"
 clap = { version = "4", features = ["cargo"] }
+log = "0.4"
+env_logger = "0.10"

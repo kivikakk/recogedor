@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use clap::{arg, command, value_parser};
 use futures::future::try_join_all;
+use log::{info, trace};
 use std::path::PathBuf;
 
 mod config;
@@ -12,6 +13,8 @@ use endpoint::IdleResult;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    env_logger::init();
+
     let matches = command!()
         .arg(
             arg!(-c --config <FILE> "Path to config.toml")
@@ -25,7 +28,7 @@ async fn main() -> Result<()> {
         .unwrap_or("config.toml".into());
     let jobs = config::from_file(&config_path)
         .with_context(|| format!("leyando {}", config_path.display()))?;
-    println!("config leída con éxito");
+    info!("config leída con éxito");
 
     let mut futs = vec![];
     for (name, job) in &jobs {
@@ -62,7 +65,7 @@ async fn run_job(name: &str, job: &Job) -> Result<()> {
             .with_context(|| format!("reading {}", name))?
         {
             if mail.flagged {
-                println!("[{}] ya copiado, saltando ...", name);
+                trace!("[{}] ya copiado, saltando ...", name);
             } else {
                 let d = match dest {
                     Some(ref mut d) => d,

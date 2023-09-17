@@ -5,7 +5,6 @@ IMAP forwarding service.
 
 ## todo
 
-* log-levels
 * configure forwarding criteria and action on forward
   * ignore mail with a given flag
   * add a flag on forward

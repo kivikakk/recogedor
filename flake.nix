@@ -50,24 +50,28 @@
         ...
       }: let
         cfg = config.services.kivikakk.recogedor;
-        inherit (lib) mkIf mkEnableOption mkOption;
+        inherit (lib) mkIf mkEnableOption mkOption types;
         tomlFormat = pkgs.formats.toml {};
       in {
         options.services.kivikakk.recogedor = {
           enable = mkEnableOption "Enable the recogedor IMAP forwarding service";
 
+          logLevel = mkOption {
+            type = types.nullOr (types.enum ["error" "warn" "info" "debug" "trace"]);
+            default = "info";
+            description = "Minimum log level.";
+          };
+
           settings = mkOption {
             type = tomlFormat.type;
             default = {};
-            description = ''
-              config.toml file used by recogedor.
-            '';
+            description = "config.toml file used by recogedor.";
           };
 
           package = mkOption {
-            type = lib.types.package;
+            type = types.package;
             default = self.packages.${system}.default;
-            description = "package to use for recogedor (defaults to this flake's)";
+            description = "Package to use for recogedor (defaults to this flake's).";
           };
         };
 
@@ -83,6 +87,9 @@
               ExecStart = "${cfg.package}/bin/recogedor --config ${configFile}";
               Restart = "on-failure";
               RestartSec = "5s";
+            };
+            environment = lib.optionalAttrs (cfg.logLevel != null) {
+              RUST_LOG = cfg.logLevel;
             };
           };
         });
