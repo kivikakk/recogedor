@@ -12,6 +12,7 @@ IMAP forwarding service.
 * harden against disconnects etc.
 * ensure unsolicited EXISTS are picked up
 * one "job" per process
+* clean shutdown
 
 
 ## install
