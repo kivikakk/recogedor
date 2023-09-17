@@ -1,5 +1,7 @@
 use anyhow::{Context, Result};
+use clap::{arg, command, value_parser};
 use futures::future::try_join_all;
+use std::path::PathBuf;
 
 mod config;
 mod endpoint;
@@ -10,7 +12,19 @@ use endpoint::IdleResult;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let jobs = config::from_file("config.toml").context("leyando config.toml")?;
+    let matches = command!()
+        .arg(
+            arg!(-c --config <FILE> "Path to config.toml")
+                .required(false)
+                .value_parser(value_parser!(PathBuf)),
+        )
+        .get_matches();
+    let config_path = matches
+        .get_one::<PathBuf>("config")
+        .cloned()
+        .unwrap_or("config.toml".into());
+    let jobs = config::from_file(&config_path)
+        .with_context(|| format!("leyando {}", config_path.display()))?;
     println!("config leída con éxito");
 
     let mut futs = vec![];

@@ -11,3 +11,4 @@ async-native-tls = { version = "0.5", default-features = false, features = ["run
 anyhow = "1"
 futures = "0.3"
 async-trait = "0.1"
+clap = { version = "4", features = ["cargo"] }
