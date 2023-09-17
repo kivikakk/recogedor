@@ -1,20 +1,14 @@
 {
   description = "recogedor";
 
-  inputs = {
-    rust-overlay.url = github:oxalica/rust-overlay;
-  };
-
   outputs = inputs @ {
     self,
     nixpkgs,
-    rust-overlay,
     flake-utils,
     ...
   }:
     flake-utils.lib.eachDefaultSystem (system: let
-      overlays = [(import rust-overlay)];
-      pkgs = import nixpkgs {inherit system overlays;};
+      pkgs = import nixpkgs {inherit system;};
     in rec {
       formatter = pkgs.alejandra;
 
@@ -38,26 +32,14 @@
           ];
       };
 
-      devShells.default = pkgs.mkShell {
-        buildInputs =
-          [
-            pkgs.rust-bin.stable.latest.default
+      devShells.default = packages.default.overrideAttrs (finalAttrs: prevAttrs: {
+        nativeBuildInputs =
+          prevAttrs.nativeBuildInputs
+          ++ [
             pkgs.rust-analyzer
             pkgs.lldb_16
-            pkgs.openssl
-          ]
-          ++ pkgs.lib.optionals (pkgs.stdenv.isDarwin) [
-            pkgs.darwin.apple_sdk.frameworks.Security
           ];
-      };
-
-      devShells.production = pkgs.mkShell {
-        buildInputs = [
-          pkgs.rust-bin.stable.latest.default
-          pkgs.pkg-config
-          pkgs.openssl
-        ];
-      };
+      });
 
       nixosModules.default = {
         config,
