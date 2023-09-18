@@ -1,22 +1,11 @@
-[jobs]
-fox = { src = "fm-fox", dest = "my-fox" }
-wolf = { src = "fm-wolf", dest = "my-wolf" }
-
-[endpoints.fm-fox]
+[src]
 type = "imap"
 host = "imap.fastmail.com"
 port = 993
 user = "fox@den.com"
 pass = "abc123"
 
-[endpoints.fm-wolf]
-type = "imap"
-host = "imap.fastmail.com"
-port = 993
-user = "wolf@den.com"
-pass = "def456"
-
-[endpoints.my-fox]
+[dest.fox]
 type = "imap"
 host = "my.mx.com"
 ip = "127.0.0.1"
@@ -24,10 +13,35 @@ port = 993
 user = "fox@den.com"
 pass = "ghi789"
 
-[endpoints.my-wolf]
+[dest.wolf]
 type = "imap"
 host = "my.mx.com"
 ip = "127.0.0.1"
 port = 993
 user = "wolf@den.com"
 pass = "jkl012"
+
+[[rule]]
+match = """
+  (and
+    (not (flagged "Recogido"))
+    (or
+      (received-by "fox@den.com")
+      (received-by "fox@foxden.net")
+    )
+  )
+"""
+action = """
+  (flag! "Recogido")
+  (append! "fox")
+  (halt!)
+"""
+
+[[rule]]
+match = """
+  (not (flagged "Recogido"))
+"""
+action = """
+  (flag! "Recogido")
+  (append! "wolf")
+"""
