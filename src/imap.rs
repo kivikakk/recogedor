@@ -77,7 +77,7 @@ pub(crate) struct ImapEndpointClient {
 
 impl ImapEndpointClient {
     async fn connect(ie: &ImapEndpoint) -> Result<ImapEndpointClient> {
-        debug!("[{}] conectando tcp ...", ie.name);
+        debug!("[{}] connecting tcp ...", ie.name);
         let addr = if let Some(ref ip) = ie.ip {
             (ip.as_ref(), ie.port)
         } else {
@@ -85,12 +85,12 @@ impl ImapEndpointClient {
         };
         let tcp_stream = TcpStream::connect(addr).await?;
         let tls = async_native_tls::TlsConnector::new();
-        debug!("[{}] conectando tls ...", ie.name);
+        debug!("[{}] connecting tls ...", ie.name);
         let tls_stream = tls.connect(&*ie.host, tcp_stream).await?;
 
-        debug!("[{}] conectando imap ...", ie.name);
+        debug!("[{}] connecting imap ...", ie.name);
         let client = async_imap::Client::new(tls_stream);
-        debug!("[{}] iniciando sesión ...", ie.name);
+        debug!("[{}] logging in ...", ie.name);
         let imap_session = Some(client.login(&*ie.user, &*ie.pass).await.map_err(|e| e.0)?);
         info!("[{}] (voz hacker) estoy dentro", ie.name);
 
@@ -104,34 +104,34 @@ impl ImapEndpointClient {
 #[async_trait]
 impl endpoint::EndpointReader for ImapEndpointClient {
     async fn inbox(&mut self) -> Result<()> {
-        let imap_session = self.imap_session.as_mut().context("sin sesión imap")?;
-        trace!("[{}] buscando correos nuevos de buzón INBOX ...", self.name);
+        let imap_session = self.imap_session.as_mut().context("no imap session")?;
+        trace!("[{}] looking for new messages in INBOX ...", self.name);
         imap_session.select("INBOX").await?;
         Ok(())
     }
 
     async fn idle(&mut self) -> Result<endpoint::IdleResult> {
-        trace!("[{}] comenzando IDLE ...", self.name);
-        let imap_session = self.imap_session.take().context("sin sesión imap")?;
+        trace!("[{}] starting IDLE ...", self.name);
+        let imap_session = self.imap_session.take().context("no imap session")?;
         let mut idle = imap_session.idle();
         idle.init().await?;
 
-        trace!("[{}] comenzó.", self.name);
+        trace!("[{}] started.", self.name);
         let ir = 'idle: loop {
             let (idle_wait, _interrupt) = idle.wait_with_timeout(Duration::from_secs(10 * 60));
-            trace!("[{}] espera ...", self.name);
+            trace!("[{}] waiting ...", self.name);
 
             match idle_wait.await? {
                 IdleResponse::NewData(data) => match &data.parsed() {
                     Response::MailboxData(MailboxDatum::Exists(n)) => {
-                        trace!("[{}] tiene EXISTS: {}", self.name, n);
+                        trace!("[{}] got EXISTS: {}", self.name, n);
                         break 'idle endpoint::IdleResult::Exists;
                     }
                     Response::Data {
                         status: Status::Bye,
                         ..
                     } => {
-                        trace!("[{}] given Bye", self.name);
+                        trace!("[{}] got Bye", self.name);
                         return Ok(endpoint::IdleResult::ReConnect);
                     }
                     parsed => {
@@ -149,15 +149,15 @@ impl endpoint::EndpointReader for ImapEndpointClient {
             }
         };
 
-        trace!("[{}] despierto!", self.name);
+        trace!("[{}] awake!", self.name);
         let imap_session = idle.done().await?;
         _ = self.imap_session.insert(imap_session);
         Ok(ir)
     }
 
     async fn read(&mut self) -> Result<Vec<endpoint::Message>> {
-        let imap_session = self.imap_session.as_mut().context("sin sesión imap")?;
-        trace!("[{}] leyendo ...", self.name);
+        let imap_session = self.imap_session.as_mut().context("no imap session")?;
+        trace!("[{}] reading ...", self.name);
         let messages_stream = imap_session
             .fetch("1:*", "(UID FLAGS RFC822 ENVELOPE)")
             .await?;
@@ -173,7 +173,7 @@ impl endpoint::EndpointReader for ImapEndpointClient {
 
     async fn flag(&mut self, uid: u32, flag: &str) -> Result<()> {
         let imap_session = self.imap_session.as_mut().context("no imap session")?;
-        trace!("[{}] flagging {:?} ...", self.name, flag);
+        info!("[{}] flagging {:?} ...", self.name, flag);
         let updates_stream = imap_session
             .uid_store(format!("{}", uid), format!("+FLAGS ({})", flag))
             .await?;
@@ -185,13 +185,13 @@ impl endpoint::EndpointReader for ImapEndpointClient {
 #[async_trait]
 impl endpoint::EndpointWriter for ImapEndpointClient {
     async fn append(&mut self, message: &endpoint::Message) -> Result<()> {
-        let imap_session = self.imap_session.as_mut().context("sin sesión imap")?;
-        info!("[{}] adjuntando mensaje ...", self.name);
+        let imap_session = self.imap_session.as_mut().context("no imap session")?;
+        info!("[{}] appending message ...", self.name);
         Ok(imap_session.append("INBOX", &message.body).await?)
     }
 
     async fn disconnect(&mut self) -> Result<()> {
-        let imap_session = self.imap_session.as_mut().context("sin sesión imap")?;
+        let imap_session = self.imap_session.as_mut().context("no imap session")?;
         Ok(imap_session.logout().await?)
     }
 }
