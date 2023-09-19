@@ -1,7 +1,6 @@
 use anyhow::{Context, Result};
 use clap::{arg, command, value_parser};
 use log::{debug, info};
-use std::collections::HashMap;
 use std::path::PathBuf;
 
 mod config;
@@ -10,7 +9,7 @@ mod imap;
 mod script;
 
 use config::Config;
-use endpoint::{Endpoint, EndpointReader, EndpointWriter, IdleResult};
+use endpoint::{Endpoint, EndpointReader, IdleResult};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -54,23 +53,10 @@ async fn run(config: &Config) -> Result<()> {
         let mut closure = config.script.closure(&config.dests);
 
         for mail in src.read().await.context("leyendo")? {
-            let actions = closure.process(mail)?;
-            for action in &actions {}
-            // if mail.flagged {
-            //     trace!("ya copiado, saltando ...");
-            // } else {
-            //     let d = match dest {
-            //         Some(ref mut d) => d,
-            //         None => dest.insert(
-            //             job.dest
-            //                 .connect_writer()
-            //                 .await
-            //                 .context("conectando escritora")?,
-            //         ),
-            //     };
-            //     d.append(&mail).await.context("adjuntando")?;
-            //     src.flag(mail.uid).await.context("marcando")?;
-            // }
+            let actions = closure.process(&mail)?;
+            for action in actions {
+                closure.action(&mail, action, &mut src).await?;
+            }
         }
 
         closure.finish().await?;

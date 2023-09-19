@@ -1,13 +1,14 @@
 use anyhow::{bail, Context, Error, Result};
 use lexpr::Value;
 use once_cell::sync::Lazy;
-use regex::Regex;
+use regex::bytes::Regex;
 use std::{
-    collections::HashMap,
+    collections::hash_map::{Entry, HashMap},
     fmt::{self, Display, Formatter},
+    str,
 };
 
-use crate::endpoint::{Endpoint, EndpointWriter, Message};
+use crate::endpoint::{Endpoint, EndpointReader, EndpointWriter, Message, Recipient};
 
 pub(crate) struct Script(Vec<Stmt>);
 
@@ -59,7 +60,7 @@ impl Stmt {
     fn pp(&self, f: &mut Formatter<'_>, indent: usize) -> fmt::Result {
         match self {
             Stmt::If(c, t, e) => {
-                write!(f, "{}(if {}", " ".repeat(indent * INDENT), c)?;
+                write!(f, "\n{}(if {}", " ".repeat(indent * INDENT), c)?;
                 t.pp(f, indent + 1)?;
                 if let Some(e) = e {
                     e.pp(f, indent + 1)?;
@@ -74,21 +75,18 @@ impl Stmt {
     }
 
     fn from_sexp(sexp: &Value) -> Result<Stmt> {
-        let vec = sexp.to_vec().context("sexp no es cons")?;
+        let vec = sexp.to_vec().context("stmt isn't cons")?;
         let head = vec
             .get(0)
-            .context("cons no tiene unos elementos")?
+            .context("stmt cons empty")?
             .as_symbol()
-            .context("el primer elemento no es un símbolo")?;
+            .context("stmt car isn't sym")?;
         match head {
             "if" => Ok(Stmt::If(
-                Cond::from_sexp(
-                    vec.get(1)
-                        .context("la declaración \"if\" no tiene condición")?,
-                )?,
-                Box::new(Stmt::from_sexp(vec.get(2).context(
-                    "la declaración \"if\" no tiene una declaración \"then\"",
-                )?)?),
+                Cond::from_sexp(vec.get(1).context("'if' statement missing condition")?)?,
+                Box::new(Stmt::from_sexp(
+                    vec.get(2).context("'if' statement missing 'then'")?,
+                )?),
                 // Someone help me budget my family is dying
                 // Please help me vec.get(3).map my way through this.
                 match vec.get(3) {
@@ -103,7 +101,7 @@ impl Stmt {
                 vec.get(1).context("?")?.as_str().context("?")?.into(),
             )),
             "halt!" => Ok(Stmt::Halt),
-            s => bail!("no sé qué esto es (en Stmt): {:?}", s),
+            s => bail!("unknown (in Stmt): {:?}", s),
         }
     }
 }
@@ -157,12 +155,12 @@ impl Cond {
             "received-by" => Ok(Cond::ReceivedBy(
                 vec.get(1).context("?")?.as_str().context("?")?.try_into()?,
             )),
-            s => bail!("no sé qué esto es (en Cond): {:?}", s),
+            s => bail!("unknown (in Cond): {:?}", s),
         }
     }
 }
 
-struct Flag(String);
+pub(crate) struct Flag(String);
 
 impl From<&str> for Flag {
     fn from(s: &str) -> Flag {
@@ -171,23 +169,56 @@ impl From<&str> for Flag {
 }
 
 pub(crate) struct Pattern {
-    mailbox: Option<String>,
-    plus: Option<String>,
-    host: Option<String>,
+    mailbox: Option<Vec<u8>>,
+    plus: Option<Vec<u8>>,
+    host: Option<Vec<u8>>,
+}
+
+impl Pattern {
+    pub(crate) fn matches(&self, recipient: &Recipient) -> bool {
+        let r_pluspos = recipient.mailbox.iter().position(|&c| c == b'+');
+        if let Some(p_mailbox) = &self.mailbox {
+            if let Some(r_pluspos) = r_pluspos {
+                if p_mailbox != &recipient.mailbox[..r_pluspos] {
+                    return false;
+                }
+            } else if p_mailbox != &recipient.mailbox {
+                return false;
+            }
+        }
+
+        if let Some(p_plus) = &self.plus {
+            if let Some(r_pluspos) = r_pluspos {
+                if p_plus != &recipient.mailbox[r_pluspos + 1..] {
+                    return false;
+                }
+            } else if p_plus.len() != 0 {
+                return false;
+            }
+        }
+
+        if let Some(p_host) = &self.host {
+            if p_host != &recipient.host {
+                return false;
+            }
+        }
+
+        true
+    }
 }
 
 impl Display for Pattern {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str("\"")?;
         if let Some(mailbox) = &self.mailbox {
-            f.write_str(mailbox)?;
+            f.write_str(str::from_utf8(mailbox).unwrap())?;
         }
         if let Some(plus) = &self.plus {
-            write!(f, "+{}", plus)?;
+            write!(f, "+{}", str::from_utf8(plus).unwrap())?;
         }
         f.write_str("@")?;
         if let Some(host) = &self.host {
-            f.write_str(host)?;
+            f.write_str(str::from_utf8(host).unwrap())?;
         }
         f.write_str("\"")?;
         Ok(())
@@ -200,11 +231,11 @@ impl std::convert::TryFrom<&str> for Pattern {
         static RE: Lazy<Regex> = Lazy::new(|| {
             Regex::new(r"\A(?<mailbox>[^+@]+)?(?:\+(?<plus>[^@]+))?@(?<host>.+)?\z").unwrap()
         });
-        let captures = RE.captures(s).context("pattern syntax error")?;
+        let captures = RE.captures(s.as_bytes()).context("pattern syntax error")?;
 
-        let mailbox = captures.name("mailbox").map(|m| m.as_str().to_string());
-        let plus = captures.name("plus").map(|m| m.as_str().to_string());
-        let host = captures.name("host").map(|m| m.as_str().to_string());
+        let mailbox = captures.name("mailbox").map(|m| m.as_bytes().to_vec());
+        let plus = captures.name("plus").map(|m| m.as_bytes().to_vec());
+        let host = captures.name("host").map(|m| m.as_bytes().to_vec());
 
         if mailbox.is_none() && plus.is_none() && host.is_none() {
             bail!("pattern needs to match something");
@@ -218,7 +249,7 @@ impl std::convert::TryFrom<&str> for Pattern {
     }
 }
 
-struct Destination(String);
+pub(crate) struct Destination(String);
 
 impl From<&str> for Destination {
     fn from(s: &str) -> Destination {
@@ -241,7 +272,21 @@ impl<'s, 'd> Closure<'s, 'd> {
         }
     }
 
-    pub(crate) fn process(&mut self, mail: Message) -> Result<Vec<Action>> {
+    async fn dest(&mut self, key: &str) -> Result<&mut Box<dyn EndpointWriter>> {
+        match self.connected_dests.entry(key.to_string()) {
+            Entry::Occupied(oe) => Ok(oe.into_mut()),
+            Entry::Vacant(ve) => {
+                let ep = self
+                    .dests
+                    .get(key)
+                    .context("internal error: unknown dest from closure")?;
+                let wr = ep.connect_writer().await?;
+                Ok(ve.insert(wr))
+            }
+        }
+    }
+
+    pub(crate) fn process(&self, mail: &Message) -> Result<Vec<Action<'s>>> {
         let mut actions = vec![];
         for stmt in &self.script.0 {
             let done = self.process_stmt(&mail, stmt, &mut actions)?;
@@ -253,10 +298,10 @@ impl<'s, 'd> Closure<'s, 'd> {
     }
 
     fn process_stmt(
-        &mut self,
+        &self,
         mail: &Message,
-        stmt: &Stmt,
-        actions: &mut Vec<Action>,
+        stmt: &'s Stmt,
+        actions: &mut Vec<Action<'s>>,
     ) -> Result<bool> {
         match stmt {
             Stmt::If(c, t, e) => {
@@ -268,9 +313,30 @@ impl<'s, 'd> Closure<'s, 'd> {
                     Ok(false)
                 }
             }
-            Stmt::Append(dn) => unreachable!(),
-            Stmt::Flag(fl) => unreachable!(),
+            Stmt::Append(dn) => {
+                if !self.dests.contains_key(&dn.0) {
+                    bail!("unknown destination {:?}", dn.0);
+                }
+                actions.push(Action::Append(dn));
+                Ok(false)
+            }
+            Stmt::Flag(fl) => {
+                actions.push(Action::Flag(fl));
+                Ok(false)
+            }
             Stmt::Halt => Ok(true),
+        }
+    }
+
+    pub(crate) async fn action(
+        &mut self,
+        mail: &Message,
+        action: Action<'_>,
+        src: &mut Box<dyn EndpointReader>,
+    ) -> Result<()> {
+        match action {
+            Action::Append(dn) => self.dest(&dn.0).await?.append(mail).await,
+            Action::Flag(fl) => src.flag(mail.uid, &fl.0).await,
         }
     }
 
@@ -282,4 +348,7 @@ impl<'s, 'd> Closure<'s, 'd> {
     }
 }
 
-pub(crate) enum Action {}
+pub(crate) enum Action<'s> {
+    Append(&'s Destination),
+    Flag(&'s Flag),
+}

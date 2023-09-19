@@ -158,7 +158,9 @@ impl endpoint::EndpointReader for ImapEndpointClient {
     async fn read(&mut self) -> Result<Vec<endpoint::Message>> {
         let imap_session = self.imap_session.as_mut().context("sin sesión imap")?;
         trace!("[{}] leyendo ...", self.name);
-        let messages_stream = imap_session.fetch("1:*", "(UID FLAGS RFC822)").await?;
+        let messages_stream = imap_session
+            .fetch("1:*", "(UID FLAGS RFC822 ENVELOPE)")
+            .await?;
         let messages: Vec<_> = messages_stream.try_collect().await?;
 
         let mut result: Vec<endpoint::Message> = vec![];
@@ -169,11 +171,11 @@ impl endpoint::EndpointReader for ImapEndpointClient {
         Ok(result)
     }
 
-    async fn flag(&mut self, uid: u32) -> Result<()> {
-        let imap_session = self.imap_session.as_mut().context("sin sesión imap")?;
-        trace!("[{}] marcado copiado ...", self.name);
+    async fn flag(&mut self, uid: u32, flag: &str) -> Result<()> {
+        let imap_session = self.imap_session.as_mut().context("no imap session")?;
+        trace!("[{}] flagging {:?} ...", self.name, flag);
         let updates_stream = imap_session
-            .uid_store(format!("{}", uid), "+FLAGS (Recogido)")
+            .uid_store(format!("{}", uid), format!("+FLAGS ({})", flag))
             .await?;
         let _updates: Vec<_> = updates_stream.try_collect().await?;
         Ok(())
