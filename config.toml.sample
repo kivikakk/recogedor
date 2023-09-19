@@ -21,27 +21,14 @@ port = 993
 user = "wolf@den.com"
 pass = "jkl012"
 
-[[rule]]
-match = """
-  (and
-    (not (flagged "Recogido"))
+[process]
+script = """
+  (if (flagged "Recogido") (halt!))
+  (if
     (or
       (received-by "fox@den.com")
-      (received-by "fox@foxden.net")
-    )
-  )
-"""
-action = """
+      (received-by "fox@foxden.net"))
+    (append! "fox")
+    (append! "wolf"))
   (flag! "Recogido")
-  (append! "fox")
-  (halt!)
-"""
-
-[[rule]]
-match = """
-  (not (flagged "Recogido"))
-"""
-action = """
-  (flag! "Recogido")
-  (append! "wolf")
 """

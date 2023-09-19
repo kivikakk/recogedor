@@ -1,15 +1,16 @@
 use anyhow::{Context, Result};
 use clap::{arg, command, value_parser};
-use futures::future::try_join_all;
-use log::{info, trace};
+use log::{debug, info};
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 mod config;
 mod endpoint;
 mod imap;
+mod script;
 
-use config::Job;
-use endpoint::IdleResult;
+use config::Config;
+use endpoint::{Endpoint, EndpointReader, EndpointWriter, IdleResult};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -26,81 +27,60 @@ async fn main() -> Result<()> {
         .get_one::<PathBuf>("config")
         .cloned()
         .unwrap_or("config.toml".into());
-    let jobs = config::from_file(&config_path)
+    let config = config::from_file(&config_path)
         .with_context(|| format!("leyando {}", config_path.display()))?;
     info!("config leída con éxito");
+    debug!("{}", config.script);
 
-    let mut futs = vec![];
-    for (name, job) in &jobs {
-        futs.push(run_job(name, job));
-    }
-
-    try_join_all(futs).await?;
+    run(&config).await?;
     Ok(())
 }
 
-async fn prep_src(name: &str, job: &Job) -> Result<Box<dyn endpoint::EndpointReader>> {
-    let mut src = job
-        .src
+async fn prep_src(endpoint: &Endpoint) -> Result<Box<dyn EndpointReader>> {
+    let mut src = endpoint
         .connect_reader()
         .await
-        .with_context(|| format!("connecting reader {}", name))?;
+        .context("conectando lectora")?;
 
-    src.inbox()
-        .await
-        .with_context(|| format!("inboxing {}", name))?;
+    src.inbox().await.context("seleccionando inbox")?;
 
     Ok(src)
 }
 
-async fn run_job(name: &str, job: &Job) -> Result<()> {
-    let mut src = prep_src(name, job).await?;
+async fn run(config: &Config) -> Result<()> {
+    let mut src = prep_src(&config.src).await?;
 
     loop {
-        let mut dest: Option<Box<dyn endpoint::EndpointWriter>> = None;
+        let mut closure = config.script.closure(&config.dests);
 
-        for mail in src
-            .read()
-            .await
-            .with_context(|| format!("reading {}", name))?
-        {
-            if mail.flagged {
-                trace!("[{}] ya copiado, saltando ...", name);
-            } else {
-                let d = match dest {
-                    Some(ref mut d) => d,
-                    None => dest.insert(
-                        job.dest
-                            .connect_writer()
-                            .await
-                            .with_context(|| format!("connecting writer {}", name))?,
-                    ),
-                };
-                d.append(&mail)
-                    .await
-                    .with_context(|| format!("appending {}", name))?;
-                src.flag(mail.uid)
-                    .await
-                    .with_context(|| format!("flagging {}", name))?;
-            }
+        for mail in src.read().await.context("leyendo")? {
+            let actions = closure.process(mail)?;
+            for action in &actions {}
+            // if mail.flagged {
+            //     trace!("ya copiado, saltando ...");
+            // } else {
+            //     let d = match dest {
+            //         Some(ref mut d) => d,
+            //         None => dest.insert(
+            //             job.dest
+            //                 .connect_writer()
+            //                 .await
+            //                 .context("conectando escritora")?,
+            //         ),
+            //     };
+            //     d.append(&mail).await.context("adjuntando")?;
+            //     src.flag(mail.uid).await.context("marcando")?;
+            // }
         }
 
-        if let Some(mut d) = dest {
-            d.disconnect()
-                .await
-                .with_context(|| format!("disconnecting {}", name))?;
-        }
+        closure.finish().await?;
 
         'idle: loop {
-            match src
-                .idle()
-                .await
-                .with_context(|| format!("idling {}", name))?
-            {
+            match src.idle().await.context("esperando")? {
                 IdleResult::Exists => break 'idle,
                 IdleResult::ReIdle => continue 'idle,
                 IdleResult::ReConnect => {
-                    src = prep_src(name, job).await?;
+                    src = prep_src(&config.src).await?;
                     break 'idle;
                 }
             }

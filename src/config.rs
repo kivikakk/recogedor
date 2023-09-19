@@ -1,74 +1,50 @@
 use crate::endpoint::Endpoint;
+use crate::script::Script;
 use anyhow::{Context, Result};
 use std::{collections::HashMap, fs, path::Path};
-use toml::{Table, Value};
+use toml::Table;
 
-pub(crate) struct Job {
+pub(crate) struct Config {
     pub(crate) src: Endpoint,
-    pub(crate) dest: Endpoint,
+    pub(crate) dests: HashMap<String, Endpoint>,
+    pub(crate) script: Script,
 }
 
-impl Job {
-    pub(crate) fn from_config_and_endpoints(
-        config: &Value,
-        endpoints: &HashMap<String, Endpoint>,
-    ) -> Result<Job> {
-        let eps = config
-            .as_table()
-            .context("un job de la config no es table")?;
-        let name_src = eps
-            .get("src")
-            .context("un job de la config no hay src")?
-            .as_str()
-            .context("el src de un job de la config no es una cadena")?;
-        let name_dest = eps
-            .get("dest")
-            .context("un job de la config no hay dest")?
-            .as_str()
-            .context("el dest de un job de la config no es una cadena")?;
-        Ok(Job {
-            src: endpoints
-                .get(name_src)
-                .context("la config no hay un endpoint con este nombre")?
-                .clone(),
-            dest: endpoints
-                .get(name_dest)
-                .context("la config no hay un endpoint con este nombre")?
-                .clone(),
-        })
-    }
-}
-
-pub(crate) fn from_file<P: AsRef<Path>>(path: P) -> Result<HashMap<String, Job>> {
+pub(crate) fn from_file<P: AsRef<Path>>(path: P) -> Result<Config> {
     let toml = fs::read_to_string(path).context("no se pudo leer config.toml")?;
     let top = toml
         .parse::<Table>()
         .context("no se pudo analizar la config")?;
 
-    let mut endpoints = HashMap::<String, Endpoint>::new();
-    let cfg_endpoints = top
-        .get("endpoints")
-        .context("la config no tiene algunos endpoints")?
-        .as_table()
-        .context("los endpoints de la config no es tabla")?;
+    let cfg_src = top
+        .get("src")
+        .context("la config no tiene endpoint de origen")?;
+    let src = Endpoint::from_config("el endpoint de origen", cfg_src)?;
 
-    for (name, table) in cfg_endpoints {
-        endpoints.insert(name.to_string(), Endpoint::from_config(name, table)?);
+    let mut dests = HashMap::<String, Endpoint>::new();
+    let cfg_dests = top
+        .get("dest")
+        .context("la config no tiene algunos endpoints de destino")?
+        .as_table()
+        .context("los endpoints de destino de la config no es tabla")?;
+
+    for (name, table) in cfg_dests {
+        dests.insert(name.to_string(), Endpoint::from_config(name, table)?);
     }
 
-    let mut jobs = HashMap::<String, Job>::new();
-    let cfg_jobs = top
-        .get("jobs")
-        .context("la config no tiene algunos jobs")?
+    let process = top
+        .get("process")
+        .context("la config no tiene la sección de proceso")?
         .as_table()
-        .context("los jobs de la config no es table")?;
+        .context("la sección de proceso no es tabla")?;
 
-    for (name, eps) in cfg_jobs {
-        jobs.insert(
-            name.to_string(),
-            Job::from_config_and_endpoints(eps, &endpoints)?,
-        );
-    }
+    let script_text = process
+        .get("script")
+        .context("la sección de proceso no tiene script")?
+        .as_str()
+        .context("el script de la sección de proceso no es una cadena")?;
 
-    Ok(jobs)
+    let script = Script::parse(script_text)?;
+
+    Ok(Config { src, dests, script })
 }

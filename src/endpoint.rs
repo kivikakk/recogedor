@@ -1,7 +1,10 @@
+use std::collections::HashSet;
+
 use anyhow::{bail, Context, Error, Result};
+use async_imap::types::Flag;
 use async_trait::async_trait;
 
-use crate::imap::ImapEndpoint;
+use crate::{imap::ImapEndpoint, script::Pattern};
 
 #[derive(Clone)]
 pub(crate) enum Endpoint {
@@ -44,22 +47,69 @@ impl Endpoint {
 
 pub(crate) struct Message {
     pub(crate) uid: u32,
-    pub(crate) flagged: bool,
     pub(crate) body: Vec<u8>,
+    flags: HashSet<String>,
+    recipients: HashSet<Vec<u8>>,
+}
+
+impl Message {
+    pub(crate) fn flagged(&self, flag: &str) -> bool {
+        self.flags.contains(flag)
+    }
+
+    pub(crate) fn received_by(&self, pattern: &Pattern) -> bool {
+        // Patterns have this syntax:
+        // (?<mailbox>[^+@]+)?(?:\+(?<plus>[^@]+))?@(?<host>.+)?
+        // Note that '@' is a part of every pattern.
+
+        // XXX
+        false
+    }
 }
 
 impl std::convert::TryFrom<&async_imap::types::Fetch> for Message {
     type Error = Error;
 
     fn try_from(message: &async_imap::types::Fetch) -> Result<Self> {
-        let flagged = message.flags().any(|f| f == "Recogido".into());
+        let body = message
+            .body()
+            .context("falta el cuerpo del mensaje")?
+            .to_vec();
+
+        let flags = message
+            .flags()
+            .map(|f| match f {
+                Flag::Custom(f) => f.to_string(),
+                f => format!("\\{:?}", f).to_string(),
+            })
+            .collect();
+
+        let envelope = message.envelope().context("mensaje no tiene sobres")?;
+        let mut recipients = HashSet::new();
+        for list in [&envelope.to, &envelope.cc, &envelope.bcc] {
+            if let Some(list) = list {
+                for addr in list {
+                    let mut recipient = Vec::<u8>::with_capacity(
+                        addr.mailbox.as_ref().map_or(0, |v| v.len())
+                            + 1
+                            + addr.host.as_ref().map_or(0, |v| v.len()),
+                    );
+                    if let Some(mailbox) = &addr.mailbox {
+                        recipient.extend_from_slice(&mailbox);
+                    }
+                    recipient.push(b'@');
+                    if let Some(host) = &addr.host {
+                        recipient.extend_from_slice(&host);
+                    }
+                    recipients.insert(recipient);
+                }
+            }
+        }
         Ok(Message {
             uid: message.uid.context("mensaje no tiene uid")?,
-            flagged,
-            body: message
-                .body()
-                .context("falta el cuerpo del mensaje")?
-                .to_vec(),
+            body,
+            flags,
+            recipients,
         })
     }
 }
