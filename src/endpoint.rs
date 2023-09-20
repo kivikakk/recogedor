@@ -3,7 +3,7 @@ use async_imap::types::Flag;
 use async_trait::async_trait;
 use std::collections::HashSet;
 
-use crate::{imap::ImapEndpoint, script::Pattern};
+use crate::{imap::ImapEndpoint, script::RecipientPattern};
 
 #[derive(Clone)]
 pub(crate) enum Endpoint {
@@ -56,7 +56,7 @@ impl Message {
         self.flags.contains(flag)
     }
 
-    pub(crate) fn received_by(&self, pattern: &Pattern) -> bool {
+    pub(crate) fn received_by(&self, pattern: &RecipientPattern) -> bool {
         self.recipients.iter().any(|r| pattern.matches(r))
     }
 }

@@ -109,7 +109,7 @@ impl Stmt {
 enum Cond {
     Or(Vec<Cond>),
     Flagged(Flag),
-    ReceivedBy(Pattern),
+    ReceivedBy(RecipientPattern),
 }
 
 impl Display for Cond {
@@ -168,28 +168,28 @@ impl From<&str> for Flag {
     }
 }
 
-pub(crate) struct Pattern {
+pub(crate) struct RecipientPattern {
     mailbox: Option<Vec<u8>>,
     plus: Option<Vec<u8>>,
     host: Option<Vec<u8>>,
 }
 
-impl Pattern {
+impl RecipientPattern {
     pub(crate) fn matches(&self, recipient: &Recipient) -> bool {
         let r_pluspos = recipient.mailbox.iter().position(|&c| c == b'+');
         if let Some(p_mailbox) = &self.mailbox {
             if let Some(r_pluspos) = r_pluspos {
-                if p_mailbox != &recipient.mailbox[..r_pluspos] {
+                if !Self::parts_equal(p_mailbox, &recipient.mailbox[..r_pluspos]) {
                     return false;
                 }
-            } else if p_mailbox != &recipient.mailbox {
+            } else if !Self::parts_equal(p_mailbox, &recipient.mailbox) {
                 return false;
             }
         }
 
         if let Some(p_plus) = &self.plus {
             if let Some(r_pluspos) = r_pluspos {
-                if p_plus != &recipient.mailbox[r_pluspos + 1..] {
+                if !Self::parts_equal(p_plus, &recipient.mailbox[r_pluspos + 1..]) {
                     return false;
                 }
             } else if p_plus.len() != 0 {
@@ -198,16 +198,30 @@ impl Pattern {
         }
 
         if let Some(p_host) = &self.host {
-            if p_host != &recipient.host {
+            if !Self::parts_equal(p_host, &recipient.host) {
                 return false;
             }
         }
 
         true
     }
+
+    fn parts_equal(a: &[u8], b: &[u8]) -> bool {
+        a.iter()
+            .map(Self::part_lower)
+            .zip(b.iter().map(Self::part_lower))
+            .all(|(x, y)| x == y)
+    }
+
+    fn part_lower(c: &u8) -> u8 {
+        match *c {
+            b'A'..=b'Z' => c + 32,
+            c => c,
+        }
+    }
 }
 
-impl Display for Pattern {
+impl Display for RecipientPattern {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str("\"")?;
         if let Some(mailbox) = &self.mailbox {
@@ -225,9 +239,9 @@ impl Display for Pattern {
     }
 }
 
-impl std::convert::TryFrom<&str> for Pattern {
+impl std::convert::TryFrom<&str> for RecipientPattern {
     type Error = Error;
-    fn try_from(s: &str) -> Result<Pattern> {
+    fn try_from(s: &str) -> Result<RecipientPattern> {
         static RE: Lazy<Regex> = Lazy::new(|| {
             Regex::new(r"\A(?<mailbox>[^+@]+)?(?:\+(?<plus>[^@]+))?@(?<host>.+)?\z").unwrap()
         });
@@ -241,7 +255,7 @@ impl std::convert::TryFrom<&str> for Pattern {
             bail!("pattern needs to match something");
         }
 
-        Ok(Pattern {
+        Ok(RecipientPattern {
             mailbox,
             plus,
             host,
