@@ -127,6 +127,11 @@ script = """
 ```
 
 
+## development
+
+* Unit tests? Just design and write it correctly the first time.
+
+
 # legal
 
 Copyright (c) 2023, Charlotte "charlottia", Asherah Connor.  
