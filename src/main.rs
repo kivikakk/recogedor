@@ -21,6 +21,7 @@ async fn main() -> Result<()> {
                 .required(false)
                 .value_parser(value_parser!(PathBuf)),
         )
+        .arg(arg!(-n --"dry-run" "Check that the config parses, but don't run."))
         .get_matches();
     let config_path = matches
         .get_one::<PathBuf>("config")
@@ -31,7 +32,9 @@ async fn main() -> Result<()> {
     info!("config read OK");
     debug!("{}", config.script);
 
-    run(&config).await?;
+    if !*matches.get_one::<bool>("dry-run").unwrap_or(&false) {
+        run(&config).await?;
+    }
     Ok(())
 }
 
