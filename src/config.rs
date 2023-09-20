@@ -11,22 +11,20 @@ pub(crate) struct Config {
 }
 
 pub(crate) fn from_file<P: AsRef<Path>>(path: P) -> Result<Config> {
-    let toml = fs::read_to_string(path).context("no se pudo leer config.toml")?;
-    let top = toml
-        .parse::<Table>()
-        .context("no se pudo analizar la config")?;
+    let path = path.as_ref();
+    let toml =
+        fs::read_to_string(path).with_context(|| format!("can't read config from {:?}", path))?;
+    let top = toml.parse::<Table>().context("can't parse config")?;
 
-    let cfg_src = top
-        .get("src")
-        .context("la config no tiene endpoint de origen")?;
-    let src = Endpoint::from_config("el endpoint de origen", cfg_src)?;
+    let cfg_src = top.get("src").context("config lacks src")?;
+    let src = Endpoint::from_config("src", cfg_src)?;
 
     let mut dests = HashMap::<String, Endpoint>::new();
     let cfg_dests = top
         .get("dest")
-        .context("la config no tiene algunos endpoints de destino")?
+        .context("config lacks any dests")?
         .as_table()
-        .context("los endpoints de destino de la config no es tabla")?;
+        .context("dests should be table?")?;
 
     for (name, table) in cfg_dests {
         dests.insert(name.to_string(), Endpoint::from_config(name, table)?);
@@ -34,15 +32,15 @@ pub(crate) fn from_file<P: AsRef<Path>>(path: P) -> Result<Config> {
 
     let process = top
         .get("process")
-        .context("la config no tiene la sección de proceso")?
+        .context("config missing process section")?
         .as_table()
-        .context("la sección de proceso no es tabla")?;
+        .context("process section should be table?")?;
 
     let script_text = process
         .get("script")
-        .context("la sección de proceso no tiene script")?
+        .context("process section missing script")?
         .as_str()
-        .context("el script de la sección de proceso no es una cadena")?;
+        .context("process script should be string?")?;
 
     let script = Script::parse(script_text)?;
 

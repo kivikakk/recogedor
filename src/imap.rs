@@ -24,36 +24,36 @@ impl ImapEndpoint {
     pub(crate) fn from_config(name: &str, table: &toml::Table) -> Result<ImapEndpoint> {
         let host = table
             .get("host")
-            .with_context(|| format!("falta el host imap {}", name))?
+            .with_context(|| format!("{} missing imap host", name))?
             .as_str()
-            .with_context(|| format!("el host imap {} no es una cadena", name))?
+            .with_context(|| format!("{} imap host not string", name))?
             .to_string();
         let ip = match table.get("ip") {
             Some(v) => Some(
                 v.as_str()
-                    .with_context(|| format!("el ip imap {} no es una cadena", name))?
+                    .with_context(|| format!("{} imap ip not string", name))?
                     .to_string(),
             ),
             None => None,
         };
         let port = table
             .get("port")
-            .with_context(|| format!("falta el pureto imap {}", name))?
+            .with_context(|| format!("{} missing imap port", name))?
             .as_integer()
-            .with_context(|| format!("el pureto imap {} no es entero", name))?
+            .with_context(|| format!("{} imap port not integer", name))?
             .try_into()
-            .with_context(|| format!("el puero imap {} no está dentro del alcance", name))?;
+            .with_context(|| format!("{} imap port not in range", name))?;
         let user = table
             .get("user")
-            .with_context(|| format!("falta el usuario imap {}", name))?
+            .with_context(|| format!("{} missing imap user", name))?
             .as_str()
-            .with_context(|| format!("el usuario imap {} no es una cadena", name))?
+            .with_context(|| format!("{} imap user not string", name))?
             .to_string();
         let pass = table
             .get("pass")
-            .with_context(|| format!("falta la contraseña imap {}", name))?
+            .with_context(|| format!("{} missing imap pass", name))?
             .as_str()
-            .with_context(|| format!("la contraseña imap {} no es una cadena", name))?
+            .with_context(|| format!("{} imap pass not string", name))?
             .to_string();
         Ok(ImapEndpoint {
             name: name.to_string(),

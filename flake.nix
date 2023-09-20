@@ -1,5 +1,5 @@
 {
-  description = "recogedor";
+  description = "recogedor cursed IMAP forwarding service";
 
   outputs = inputs @ {
     self,
@@ -49,12 +49,12 @@
         pkgs,
         ...
       }: let
-        cfg = config.services.kivikakk.recogedor;
+        cfg = config.services.recogedor;
         inherit (lib) mkIf mkEnableOption mkOption types;
         tomlFormat = pkgs.formats.toml {};
       in {
-        options.services.kivikakk.recogedor = {
-          enable = mkEnableOption "Enable the recogedor IMAP forwarding service";
+        options.services.recogedor = {
+          enable = mkEnableOption "Enable the recogedor cursed IMAP forwarding service";
 
           logLevel = mkOption {
             type = types.nullOr (types.enum ["error" "warn" "info" "debug" "trace"]);

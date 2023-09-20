@@ -27,8 +27,8 @@ async fn main() -> Result<()> {
         .cloned()
         .unwrap_or("config.toml".into());
     let config = config::from_file(&config_path)
-        .with_context(|| format!("leyando {}", config_path.display()))?;
-    info!("config leída con éxito");
+        .with_context(|| format!("reading {}", config_path.display()))?;
+    info!("config read OK");
     debug!("{}", config.script);
 
     run(&config).await?;
@@ -39,9 +39,9 @@ async fn prep_src(endpoint: &Endpoint) -> Result<Box<dyn EndpointReader>> {
     let mut src = endpoint
         .connect_reader()
         .await
-        .context("conectando lectora")?;
+        .context("connecting reader")?;
 
-    src.inbox().await.context("seleccionando inbox")?;
+    src.inbox().await.context("selecting inbox")?;
 
     Ok(src)
 }
@@ -52,7 +52,7 @@ async fn run(config: &Config) -> Result<()> {
     loop {
         let mut closure = config.script.closure(&config.dests);
 
-        for mail in src.read().await.context("leyendo")? {
+        for mail in src.read().await.context("reading")? {
             let actions = closure.process(&mail)?;
             for action in actions {
                 closure.action(&mail, action, &mut src).await?;
@@ -62,7 +62,7 @@ async fn run(config: &Config) -> Result<()> {
         closure.finish().await?;
 
         'idle: loop {
-            match src.idle().await.context("esperando")? {
+            match src.idle().await.context("IDLEing")? {
                 IdleResult::Exists => break 'idle,
                 IdleResult::ReIdle => continue 'idle,
                 IdleResult::ReConnect => {

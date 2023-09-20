@@ -1,17 +1,12 @@
 # recogedor
 
-IMAP forwarding service.
+Cursed IMAP forwarding service.
 
 
 ## todo
 
-* configure forwarding criteria and action on forward
-  * ignore mail with a given flag
-  * add a flag on forward
-  * forward to which endpoint based on what?
 * harden against disconnects etc.
-* ensure unsolicited EXISTS are picked up
-* one "job" per process
+* ensure unsolicited EXISTS are picked up/check EXISTS races
 * clean shutdown
 
 
@@ -20,7 +15,7 @@ IMAP forwarding service.
 Add the repository to your flake inputs:
 
 ```nix
-inputs.recogedor.url = github:kivikakk/recogedor;
+inputs.recogedor.url = github:charlottia/recogedor;
 ```
 
 Add the NixOS module exposed by the flake:
@@ -38,7 +33,7 @@ nixosSystem {
 Configure your system to use recogedor:
 
 ```nix
-services.kivikakk.recogedor = {
+services.recogedor = {
   enable = true;
   settings = lib.importTOML ./recogedor.toml;
 };
@@ -47,33 +42,23 @@ services.kivikakk.recogedor = {
 
 ## config
 
-To be documented once the shape of the program is better figured out.
+TODO
 
 
 ### example
 
-Forward new mail received on two different Fastmail accounts to two different local accounts.
+Forward new mail received on one Fastmail account with multiple aliases to two different local
+accounts.
 
 ```toml
-[jobs]
-fox = { src = "fm-fox", dest = "my-fox" }
-wolf = { src = "fm-wolf", dest = "my-wolf" }
-
-[endpoints.fm-fox]
+[src]
 type = "imap"
 host = "imap.fastmail.com"
 port = 993
 user = "fox@den.com"
 pass = "abc123"
 
-[endpoints.fm-wolf]
-type = "imap"
-host = "imap.fastmail.com"
-port = 993
-user = "wolf@den.com"
-pass = "def456"
-
-[endpoints.my-fox]
+[dest.fox]
 type = "imap"
 host = "my.mx.com"
 ip = "127.0.0.1"
@@ -81,17 +66,29 @@ port = 993
 user = "fox@den.com"
 pass = "ghi789"
 
-[endpoints.my-wolf]
+[dest.wolf]
 type = "imap"
 host = "my.mx.com"
 ip = "127.0.0.1"
 port = 993
 user = "wolf@den.com"
 pass = "jkl012"
+
+[process]
+script = """
+  (if (flagged "Recogido") (halt!))
+  (if
+    (or
+      (received-by "fox@den.com")
+      (received-by "fox@foxden.net"))
+    (append! "fox")
+    (append! "wolf"))
+  (flag! "Recogido")
+"""
 ```
 
 
 # legal
 
-Copyright (c) 2023, Asherah Connor, Charlotte "charlottia".  
+Copyright (c) 2023, Charlotte "charlottia", Asherah Connor.  
 Licensed under the [Zero-Clause BSD License](LICENSE.txt).

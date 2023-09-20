@@ -342,7 +342,7 @@ impl<'s, 'd> Closure<'s, 'd> {
 
     pub(crate) async fn finish(mut self) -> Result<()> {
         for (_, dest) in &mut self.connected_dests {
-            dest.disconnect().await.context("desconectando")?;
+            dest.disconnect().await.context("disconnecting")?;
         }
         Ok(())
     }
