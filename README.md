@@ -5,10 +5,11 @@ Cursed IMAP forwarding service.
 
 ## todo
 
+* need to handle "Spam" as well? second thread?
 * harden against disconnects etc.
 * ensure unsolicited EXISTS are picked up/check EXISTS races
 * clean shutdown
-* dry-run should evaluate append targets (and everything that implies)
+* obviously optimizable part: `if x { flag y } else { flag z }` => CTE.
 
 
 ## install

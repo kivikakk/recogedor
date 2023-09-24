@@ -65,17 +65,21 @@ impl IRCompiler {
         match stmt {
             Stmt::If(c, t, e) => {
                 self.compile_cond(c)?;
-                self.insns.push(Insn::JumpFalse(0)); // XXX to Else:
+
+                let else_target = self.insns.len();
+                self.insns.push(Insn::JumpFalse(0));
+
                 self.compile_stmt(t)?;
                 if let Some(e) = e {
-                    self.insns.push(Insn::Jump(0)); // XXX to Done:
+                    let done_target = self.insns.len();
+                    self.insns.push(Insn::Jump(0));
 
-                    // Else:
+                    self.insns[else_target] = Insn::JumpFalse(self.insns.len());
                     self.compile_stmt(e)?;
 
-                    // Done:
+                    self.insns[done_target] = Insn::Jump(self.insns.len());
                 } else {
-                    // Else:
+                    self.insns[else_target] = Insn::JumpFalse(self.insns.len());
                 }
             }
             Stmt::Append(dn) => {
@@ -180,6 +184,7 @@ impl fmt::Display for Insn {
                 if let Some(plus) = plus {
                     write!(f, "+{}", str::from_utf8(&plus).unwrap())?;
                 }
+                f.write_str("@")?;
                 if let Some(host) = host {
                     f.write_str(str::from_utf8(&host).unwrap())?;
                 }
@@ -196,26 +201,29 @@ impl fmt::Display for Insn {
             Insn::Flag => f.write_str("flag!"),
             Insn::Halt => f.write_str("halt!"),
 
-            Insn::Jump(d) => write!(f, "j {:02}", d),
-            Insn::JumpFalse(d) => write!(f, "jfalse {:02}", d),
+            Insn::Jump(d) => write!(f, "j {:02x}", d),
+            Insn::JumpFalse(d) => write!(f, "jfalse {:02x}", d),
         }
     }
 }
 
-// 00 "Recogido"
+// 00 f"Recogido"
 // 01 flagged?
 // 02 jfalse 04
 // 03 halt!
-// 04 "fox@den.com"
+// 04 rp"fox@den.com"
 // 05 received-by?
-// 06 "fox@foxden.net"
+// 06 rp"fox@foxden.net"
 // 07 received-by?
 // 08 or
-// 09 jfalse 13
-// 10 "fox" (&)
+// 09 rp"fx@"
+// 0a received-by?
+// 0b or
+// 0c jfalse 10
+// 0d d0
+// 0e append!
+// 0f j 12
+// 10 d1
 // 11 append!
-// 12 j 15
-// 13 "wolf" (&)
-// 14 append!
-// 15 "Recogido"
-// 16 flag!
+// 12 f"Recogido"
+// 13 flag!
