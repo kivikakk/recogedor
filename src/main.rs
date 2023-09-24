@@ -3,9 +3,11 @@ use clap::{arg, command, value_parser};
 use log::{debug, info};
 use std::path::PathBuf;
 
+mod ast;
 mod config;
 mod endpoint;
 mod imap;
+mod ir;
 mod script;
 
 use config::Config;
@@ -30,7 +32,7 @@ async fn main() -> Result<()> {
     let config = config::from_file(&config_path)
         .with_context(|| format!("reading {}", config_path.display()))?;
     info!("config read OK");
-    debug!("{}", config.script);
+    debug!("{}", config.ir);
 
     if !*matches.get_one::<bool>("dry-run").unwrap_or(&false) {
         run(&config).await?;
@@ -53,13 +55,10 @@ async fn run(config: &Config) -> Result<()> {
     let mut src = prep_src(&config.src).await?;
 
     loop {
-        let mut closure = config.script.closure(&config.dests);
+        let mut closure = config.ir.closure();
 
         for mail in src.read().await.context("reading")? {
-            let actions = closure.process(&mail)?;
-            for action in actions {
-                closure.action(&mail, action, &mut src).await?;
-            }
+            closure.process(&mail, &mut src).await?;
         }
 
         closure.finish().await?;

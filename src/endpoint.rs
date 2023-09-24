@@ -3,7 +3,7 @@ use async_imap::types::Flag;
 use async_trait::async_trait;
 use std::collections::HashSet;
 
-use crate::{imap::ImapEndpoint, script::RecipientPattern};
+use crate::{ast::RecipientPattern, imap::ImapEndpoint};
 
 #[derive(Clone)]
 pub(crate) enum Endpoint {

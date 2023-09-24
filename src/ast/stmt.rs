@@ -5,7 +5,7 @@ use std::fmt::{self, Display, Formatter};
 use super::cond::Cond;
 use super::value::{Destination, Flag};
 
-pub(super) enum Stmt {
+pub(crate) enum Stmt {
     If(Cond, Box<Stmt>, Option<Box<Stmt>>),
     Append(Destination),
     Flag(Flag),
@@ -38,7 +38,7 @@ impl Stmt {
         }
     }
 
-    pub(super) fn from_sexp(sexp: &Value) -> Result<Stmt> {
+    pub(crate) fn from_sexp(sexp: &Value) -> Result<Stmt> {
         let vec = sexp.to_vec().context("stmt isn't cons")?;
         let head = vec
             .get(0)

@@ -8,7 +8,7 @@ use std::{
 
 use crate::endpoint::Recipient;
 
-pub(crate) struct Flag(pub(super) String);
+pub(crate) struct Flag(pub(crate) String);
 
 impl From<&str> for Flag {
     fn from(s: &str) -> Flag {
@@ -17,9 +17,9 @@ impl From<&str> for Flag {
 }
 
 pub(crate) struct RecipientPattern {
-    mailbox: Option<Vec<u8>>,
-    plus: Option<Vec<u8>>,
-    host: Option<Vec<u8>>,
+    pub(crate) mailbox: Option<Vec<u8>>,
+    pub(crate) plus: Option<Vec<u8>>,
+    pub(crate) host: Option<Vec<u8>>,
 }
 
 impl RecipientPattern {
@@ -111,7 +111,7 @@ impl std::convert::TryFrom<&str> for RecipientPattern {
     }
 }
 
-pub(crate) struct Destination(pub(super) String);
+pub(crate) struct Destination(pub(crate) String);
 
 impl From<&str> for Destination {
     fn from(s: &str) -> Destination {

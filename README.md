@@ -9,7 +9,6 @@ Cursed IMAP forwarding service.
 * ensure unsolicited EXISTS are picked up/check EXISTS races
 * clean shutdown
 * dry-run should evaluate append targets (and everything that implies)
-* compile script to native code/WASM/something. You Know You Want To.
 
 
 ## install

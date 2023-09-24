@@ -1,13 +1,14 @@
-use crate::endpoint::Endpoint;
-use crate::script::Script;
 use anyhow::{Context, Result};
 use std::{collections::HashMap, fs, path::Path};
 use toml::Table;
 
+use crate::endpoint::Endpoint;
+use crate::ir::IR;
+use crate::script;
+
 pub(crate) struct Config {
     pub(crate) src: Endpoint,
-    pub(crate) dests: HashMap<String, Endpoint>,
-    pub(crate) script: Script,
+    pub(crate) ir: IR,
 }
 
 pub(crate) fn from_file<P: AsRef<Path>>(path: P) -> Result<Config> {
@@ -42,7 +43,7 @@ pub(crate) fn from_file<P: AsRef<Path>>(path: P) -> Result<Config> {
         .as_str()
         .context("process script should be string?")?;
 
-    let script = Script::parse(script_text)?;
+    let ir = script::compile(script_text, dests)?;
 
-    Ok(Config { src, dests, script })
+    Ok(Config { src, ir })
 }
