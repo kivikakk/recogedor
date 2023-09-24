@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use clap::{arg, command, value_parser};
+use futures::future::try_join_all;
 use log::{debug, info};
 use std::path::PathBuf;
 
@@ -11,7 +12,7 @@ mod ir;
 mod script;
 
 use config::Config;
-use endpoint::{Endpoint, EndpointReader, IdleResult};
+use endpoint::{Endpoint, IdleResult, SourceEndpoint};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -35,24 +36,25 @@ async fn main() -> Result<()> {
     debug!("{}", config.ir);
 
     if !*matches.get_one::<bool>("dry-run").unwrap_or(&false) {
-        run(&config).await?;
+        try_join_all(vec![run(&config, "INBOX"), run(&config, "Spam")]).await?;
     }
+
     Ok(())
 }
 
-async fn prep_src(endpoint: &Endpoint) -> Result<Box<dyn EndpointReader>> {
+async fn prep_src(endpoint: &Endpoint, folder: &str) -> Result<Box<dyn SourceEndpoint>> {
     let mut src = endpoint
-        .connect_reader()
+        .connect_source()
         .await
-        .context("connecting reader")?;
+        .context("connecting source")?;
 
-    src.inbox().await.context("selecting inbox")?;
+    src.select(folder).await.context("selecting folder")?;
 
     Ok(src)
 }
 
-async fn run(config: &Config) -> Result<()> {
-    let mut src = prep_src(&config.src).await?;
+async fn run(config: &Config, folder: &str) -> Result<()> {
+    let mut src = prep_src(&config.src, folder).await?;
 
     loop {
         let mut closure = config.ir.closure();
@@ -68,7 +70,7 @@ async fn run(config: &Config) -> Result<()> {
                 IdleResult::Exists => break 'idle,
                 IdleResult::ReIdle => continue 'idle,
                 IdleResult::ReConnect => {
-                    src = prep_src(&config.src).await?;
+                    src = prep_src(&config.src, folder).await?;
                     break 'idle;
                 }
             }

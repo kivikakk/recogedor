@@ -26,7 +26,7 @@ impl Endpoint {
         Ok(Endpoint::Imap(ImapEndpoint::from_config(which, table)?))
     }
 
-    pub(crate) async fn connect_reader(&self) -> Result<Box<dyn EndpointReader>> {
+    pub(crate) async fn connect_source(&self) -> Result<Box<dyn SourceEndpoint>> {
         match self {
             Endpoint::Imap(ie) => {
                 let iec = ie.connect().await?;
@@ -34,7 +34,7 @@ impl Endpoint {
             }
         }
     }
-    pub(crate) async fn connect_writer(&self) -> Result<Box<dyn EndpointWriter>> {
+    pub(crate) async fn connect_destination(&self) -> Result<Box<dyn DestinationEndpoint>> {
         match self {
             Endpoint::Imap(ie) => {
                 let iec = ie.connect().await?;
@@ -117,14 +117,27 @@ pub(crate) enum IdleResult {
 }
 
 #[async_trait]
+pub(crate) trait EndpointSelector {
+    async fn select(&mut self, folder: &str) -> Result<()>;
+}
+
+#[async_trait]
 pub(crate) trait EndpointReader {
-    async fn inbox(&mut self) -> Result<()>;
     async fn idle(&mut self) -> Result<IdleResult>;
     async fn read(&mut self) -> Result<Vec<Message>>;
     async fn flag(&mut self, uid: u32, flag: &str) -> Result<()>;
 }
+
+#[async_trait]
+pub(crate) trait SourceEndpoint: EndpointSelector + EndpointReader {}
+impl<T: EndpointSelector + EndpointReader> SourceEndpoint for T {}
+
 #[async_trait]
 pub(crate) trait EndpointWriter {
     async fn append(&mut self, message: &Message) -> Result<()>;
     async fn disconnect(&mut self) -> Result<()>;
 }
+
+#[async_trait]
+pub(crate) trait DestinationEndpoint: EndpointSelector + EndpointWriter {}
+impl<T: EndpointSelector + EndpointWriter> DestinationEndpoint for T {}

@@ -102,14 +102,17 @@ impl ImapEndpointClient {
 }
 
 #[async_trait]
-impl endpoint::EndpointReader for ImapEndpointClient {
-    async fn inbox(&mut self) -> Result<()> {
+impl endpoint::EndpointSelector for ImapEndpointClient {
+    async fn select(&mut self, folder: &str) -> Result<()> {
         let imap_session = self.imap_session.as_mut().context("no imap session")?;
-        trace!("[{}] looking for new messages in INBOX ...", self.name);
-        imap_session.select("INBOX").await?;
+        trace!("[{}] selecting {:?} ...", self.name, folder);
+        imap_session.select(folder).await?;
         Ok(())
     }
+}
 
+#[async_trait]
+impl endpoint::EndpointReader for ImapEndpointClient {
     async fn idle(&mut self) -> Result<endpoint::IdleResult> {
         trace!("[{}] starting IDLE ...", self.name);
         let imap_session = self.imap_session.take().context("no imap session")?;

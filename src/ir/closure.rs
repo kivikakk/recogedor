@@ -2,11 +2,11 @@ use anyhow::{bail, Context, Result};
 
 use super::{Insn, IR};
 use crate::ast::RecipientPattern;
-use crate::endpoint::{EndpointReader, EndpointWriter, Message};
+use crate::endpoint::{DestinationEndpoint, Message, SourceEndpoint};
 
 pub(crate) struct Closure<'i> {
     ir: &'i IR,
-    dest_slots: Vec<Option<Box<dyn EndpointWriter>>>,
+    dest_slots: Vec<Option<Box<dyn DestinationEndpoint>>>,
 }
 
 impl<'i> Closure<'i> {
@@ -15,20 +15,20 @@ impl<'i> Closure<'i> {
         Closure { ir, dest_slots }
     }
 
-    async fn dest(&mut self, ix: usize) -> Result<&mut Box<dyn EndpointWriter>> {
+    async fn dest(&mut self, ix: usize) -> Result<&mut Box<dyn DestinationEndpoint>> {
         let slot = self.dest_slots.get_mut(ix).unwrap();
         if let Some(ep) = slot {
             return Ok(ep);
         }
 
-        *slot = Some(self.ir.dests[ix].connect_writer().await?);
+        *slot = Some(self.ir.dests[ix].connect_destination().await?);
         Ok(slot.as_mut().unwrap())
     }
 
     pub(crate) async fn process(
         &mut self,
         mail: &Message,
-        src: &mut Box<dyn EndpointReader>,
+        src: &mut Box<dyn SourceEndpoint>,
     ) -> Result<()> {
         let mut stack = Stack::new();
         let mut pc: usize = 0;
