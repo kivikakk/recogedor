@@ -24,6 +24,8 @@ impl IR {
 
 impl fmt::Display for IR {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("\n")?;
+
         let mut ix = 0;
         for insn in &self.insns {
             write!(f, "{:02x} {}\n", ix, insn)?;
