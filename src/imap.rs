@@ -173,16 +173,6 @@ impl endpoint::EndpointReader for ImapEndpointClient {
 
         Ok(result)
     }
-
-    async fn flag(&mut self, uid: u32, flag: &str) -> Result<()> {
-        let imap_session = self.imap_session.as_mut().context("no imap session")?;
-        info!("[{}] flagging {:?} ...", self.name, flag);
-        let updates_stream = imap_session
-            .uid_store(format!("{}", uid), format!("+FLAGS ({})", flag))
-            .await?;
-        let _updates: Vec<_> = updates_stream.try_collect().await?;
-        Ok(())
-    }
 }
 
 #[async_trait]
@@ -196,5 +186,22 @@ impl endpoint::EndpointWriter for ImapEndpointClient {
     async fn disconnect(&mut self) -> Result<()> {
         let imap_session = self.imap_session.as_mut().context("no imap session")?;
         Ok(imap_session.logout().await?)
+    }
+}
+
+#[async_trait]
+impl endpoint::EndpointFlagger for ImapEndpointClient {
+    async fn flag(&mut self, uid: u32, flag: &str) -> Result<()> {
+        let imap_session = self.imap_session.as_mut().context("no imap session")?;
+        info!("[{}] flagging {:?} ...", self.name, flag);
+        let updates_stream = imap_session
+            .uid_store(format!("{}", uid), format!("+FLAGS ({})", flag))
+            .await?;
+        let _updates: Vec<_> = updates_stream.try_collect().await?;
+        Ok(())
+    }
+
+    async fn delete(&mut self, uid: u32) -> Result<()> {
+        self.flag(uid, r"\Deleted").await
     }
 }

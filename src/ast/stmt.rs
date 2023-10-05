@@ -7,9 +7,11 @@ use super::value::{Destination, Flag};
 
 pub(crate) enum Stmt {
     If(Cond, Box<Stmt>, Option<Box<Stmt>>),
+    Do(Vec<Stmt>),
     Append(Destination),
     Flag(Flag),
     Halt,
+    Delete,
 }
 
 impl Display for Stmt {
@@ -32,9 +34,18 @@ impl Stmt {
                 f.write_str(")")?;
                 Ok(())
             }
+            Stmt::Do(sx) => {
+                write!(f, "\n{}(do", " ".repeat(indent * INDENT))?;
+                for s in sx {
+                    s.pp(f, indent + 1)?;
+                }
+                f.write_str(")")?;
+                Ok(())
+            }
             Stmt::Append(d) => write!(f, "\n{}(append! {:?})", " ".repeat(indent * INDENT), d.0),
             Stmt::Flag(fl) => write!(f, "\n{}(flag! {:?})", " ".repeat(indent * INDENT), fl.0),
             Stmt::Halt => write!(f, "\n{}(halt!)", " ".repeat(indent * INDENT)),
+            Stmt::Delete => write!(f, "\n{}(delete!)", " ".repeat(indent * INDENT)),
         }
     }
 
@@ -58,6 +69,12 @@ impl Stmt {
                     None => None,
                 },
             )),
+            "do" => Ok(Stmt::Do(
+                vec[1..]
+                    .into_iter()
+                    .map(Stmt::from_sexp)
+                    .collect::<Result<Vec<_>>>()?,
+            )),
             "append!" => Ok(Stmt::Append(
                 vec.get(1).context("?")?.as_str().context("?")?.into(),
             )),
@@ -65,6 +82,7 @@ impl Stmt {
                 vec.get(1).context("?")?.as_str().context("?")?.into(),
             )),
             "halt!" => Ok(Stmt::Halt),
+            "delete!" => Ok(Stmt::Delete),
             s => bail!("unknown (in Stmt): {:?}", s),
         }
     }

@@ -125,12 +125,20 @@ pub(crate) trait EndpointSelector {
 pub(crate) trait EndpointReader {
     async fn idle(&mut self) -> Result<IdleResult>;
     async fn read(&mut self) -> Result<Vec<Message>>;
-    async fn flag(&mut self, uid: u32, flag: &str) -> Result<()>;
 }
 
 #[async_trait]
-pub(crate) trait SourceEndpoint: EndpointSelector + EndpointReader {}
-impl<T: EndpointSelector + EndpointReader> SourceEndpoint for T {}
+pub(crate) trait EndpointFlagger {
+    async fn flag(&mut self, uid: u32, flag: &str) -> Result<()>;
+    async fn delete(&mut self, uid: u32) -> Result<()>;
+}
+
+#[async_trait]
+pub(crate) trait SourceEndpoint:
+    EndpointSelector + EndpointReader + EndpointFlagger
+{
+}
+impl<T: EndpointSelector + EndpointReader + EndpointFlagger> SourceEndpoint for T {}
 
 #[async_trait]
 pub(crate) trait EndpointWriter {

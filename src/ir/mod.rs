@@ -84,6 +84,11 @@ impl IRCompiler {
                     self.insns[else_target] = Insn::JumpFalse(self.insns.len());
                 }
             }
+            Stmt::Do(sx) => {
+                for s in sx {
+                    self.compile_stmt(s)?;
+                }
+            }
             Stmt::Append(dn) => {
                 self.compile_dest(dn)?;
                 self.insns.push(Insn::Append);
@@ -93,6 +98,7 @@ impl IRCompiler {
                 self.insns.push(Insn::Flag);
             }
             Stmt::Halt => self.insns.push(Insn::Halt),
+            Stmt::Delete => self.insns.push(Insn::Delete),
         }
         Ok(())
     }
@@ -169,6 +175,7 @@ enum Insn {
     Append,
     Flag,
     Halt,
+    Delete,
 
     Jump(usize),
     JumpFalse(usize),
@@ -202,6 +209,7 @@ impl fmt::Display for Insn {
             Insn::Append => f.write_str("append!"),
             Insn::Flag => f.write_str("flag!"),
             Insn::Halt => f.write_str("halt!"),
+            Insn::Delete => f.write_str("delete!"),
 
             Insn::Jump(d) => write!(f, "j {:02x}", d),
             Insn::JumpFalse(d) => write!(f, "jfalse {:02x}", d),

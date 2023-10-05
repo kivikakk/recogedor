@@ -60,9 +60,11 @@ The following statement forms are defined:
 
 * `(if C T E)` -- evaluate the condition C and execute statement T if true, E otherwise.  E may be
   omitted.
+* `(do ...)` -- execute the statements following.
 * `(halt!)` -- stop processing this mail item.
 * `(append! D)` -- append this mail item to destination D.
 * `(flag! F)` -- set the flag F on the mail item.
+* `(delete!)` -- delete the mail item on the source.
 
 The following condition forms are defined:
 
@@ -123,9 +125,12 @@ script = """
     (or
       (received-by "fox@den.com")
       (received-by "s.fox@foxden.net"))
-    (append! "fox")
-    (append! "wolf"))
-  (flag! "Recogido")
+    (do
+      (append! "fox")
+      (flag! "Recogido"))
+    (do
+      (append! "wolf")
+      (delete!)))
 """
 ```
 

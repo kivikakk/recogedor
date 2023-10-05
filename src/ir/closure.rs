@@ -70,6 +70,9 @@ impl<'i> Closure<'i> {
                     src.flag(mail.uid, &fl).await?;
                 }
                 &Insn::Halt => break,
+                &Insn::Delete => {
+                    src.delete(mail.uid).await?;
+                }
 
                 &Insn::Jump(t) => {
                     pc = t;
