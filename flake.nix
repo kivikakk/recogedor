@@ -39,6 +39,7 @@
           prevAttrs.nativeBuildInputs
           ++ [
             pkgs.rust-analyzer
+            pkgs.rustfmt
             pkgs.lldb_16
           ];
       });

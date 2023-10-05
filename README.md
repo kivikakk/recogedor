@@ -5,7 +5,6 @@ Cursed IMAP forwarding service.
 
 ## todo
 
-* need to handle "Spam" as well? second thread?
 * harden against disconnects etc.
 * ensure unsolicited EXISTS are picked up/check EXISTS races
 * clean shutdown
@@ -46,6 +45,9 @@ services.recogedor = {
 
 Configure a source and one or more destination mailboxes.  `imap` is currently the only supported
 `type`.  TLS is always used.  `host` is used for SNI.  The `ip` can be specified manually.
+
+The source defines the list of folders to monitor.  Mail items are appended to the corresponding
+folder on the destination side.
 
 The process script is a Lisp.  I'm terribly sorry.  One or more sexps define the action to be taken
 on each mail item.  **You must implement your own idempotency method.**  Recogedor will rescan the
@@ -96,6 +98,7 @@ host = "imap.fastmail.com"
 port = 993
 user = "fox@den.com"
 pass = "abc123"
+folders = ["INBOX", "Spam"]
 
 [dest.fox]
 type = "imap"

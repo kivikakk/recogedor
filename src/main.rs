@@ -36,7 +36,11 @@ async fn main() -> Result<()> {
     debug!("{}", config.ir);
 
     if !*matches.get_one::<bool>("dry-run").unwrap_or(&false) {
-        try_join_all(vec![run(&config, "INBOX"), run(&config, "Spam")]).await?;
+        let mut futs = vec![];
+        for folder in &config.folders {
+            futs.push(run(&config, folder));
+        }
+        try_join_all(futs).await?;
     }
 
     Ok(())

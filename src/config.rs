@@ -8,6 +8,7 @@ use crate::script;
 
 pub(crate) struct Config {
     pub(crate) src: Endpoint,
+    pub(crate) folders: Vec<String>,
     pub(crate) ir: IR,
 }
 
@@ -19,6 +20,20 @@ pub(crate) fn from_file<P: AsRef<Path>>(path: P) -> Result<Config> {
 
     let cfg_src = top.get("src").context("config lacks src")?;
     let src = Endpoint::from_config("src", cfg_src)?;
+    let folders_arr = cfg_src
+        .get("folders")
+        .context("src lacks folders")?
+        .as_array()
+        .context("folders not list")?;
+    let mut folders = vec![];
+    for folder in folders_arr {
+        folders.push(
+            folder
+                .as_str()
+                .context("folder should be string?")?
+                .to_string(),
+        );
+    }
 
     let mut dests = HashMap::<String, Endpoint>::new();
     let cfg_dests = top
@@ -45,5 +60,5 @@ pub(crate) fn from_file<P: AsRef<Path>>(path: P) -> Result<Config> {
 
     let ir = script::compile(script_text, dests)?;
 
-    Ok(Config { src, ir })
+    Ok(Config { src, folders, ir })
 }
