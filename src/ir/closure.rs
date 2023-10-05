@@ -6,22 +6,34 @@ use crate::endpoint::{DestinationEndpoint, Message, SourceEndpoint};
 
 pub(crate) struct Closure<'i> {
     ir: &'i IR,
-    dest_slots: Vec<Option<Box<dyn DestinationEndpoint>>>,
+    folder: String,
+    slots: Vec<Option<Slot>>,
+    src_needs_expunge: bool,
+}
+
+struct Slot {
+    dest: Box<dyn DestinationEndpoint>,
 }
 
 impl<'i> Closure<'i> {
-    pub(super) fn new(ir: &'i IR) -> Closure<'i> {
-        let dest_slots = ir.dests.iter().map(|_| None).collect();
-        Closure { ir, dest_slots }
+    pub(super) fn new(ir: &'i IR, folder: &str) -> Closure<'i> {
+        Closure {
+            ir,
+            folder: folder.to_string(),
+            slots: ir.dests.iter().map(|_| None).collect(),
+            src_needs_expunge: false,
+        }
     }
 
-    async fn dest(&mut self, ix: usize) -> Result<&mut Box<dyn DestinationEndpoint>> {
-        let slot = self.dest_slots.get_mut(ix).unwrap();
+    async fn slot(&mut self, ix: usize) -> Result<&mut Slot> {
+        let slot = self.slots.get_mut(ix).unwrap();
         if let Some(ep) = slot {
             return Ok(ep);
         }
 
-        *slot = Some(self.ir.dests[ix].connect_destination().await?);
+        *slot = Some(Slot {
+            dest: self.ir.dests[ix].connect_destination().await?,
+        });
         Ok(slot.as_mut().unwrap())
     }
 
@@ -37,8 +49,8 @@ impl<'i> Closure<'i> {
             let insn = &self.ir.insns[pc];
 
             match insn {
-                &Insn::LiteralFlag(ref fl) => stack.push(Value::Flag(fl.to_string())),
-                &Insn::LiteralRecipientPattern(ref mailbox, ref plus, ref host) => {
+                Insn::LiteralFlag(fl) => stack.push(Value::Flag(fl.to_string())),
+                Insn::LiteralRecipientPattern(mailbox, plus, host) => {
                     stack.push(Value::RecipientPattern(RecipientPattern {
                         mailbox: mailbox.to_owned(),
                         plus: plus.to_owned(),
@@ -47,31 +59,33 @@ impl<'i> Closure<'i> {
                 }
                 &Insn::LiteralDest(dn) => stack.push(Value::Destination(dn)),
 
-                &Insn::Flagged => {
+                Insn::Flagged => {
                     let fl = stack.pop_flag()?;
                     stack.push(Value::Cond(mail.flagged(&fl)));
                 }
-                &Insn::ReceivedBy => {
+                Insn::ReceivedBy => {
                     let p = stack.pop_recipient_pattern()?;
                     stack.push(Value::Cond(mail.received_by(&p)));
                 }
-                &Insn::Or => {
+                Insn::Or => {
                     let c1 = stack.pop_cond()?;
                     let c2 = stack.pop_cond()?;
                     stack.push(Value::Cond(c1 || c2));
                 }
 
-                &Insn::Append => {
+                Insn::Append => {
                     let ix = stack.pop_destination()?;
-                    self.dest(ix).await?.append(mail).await?;
+                    let folder = self.folder.to_string();
+                    self.slot(ix).await?.dest.append(&folder, mail).await?;
                 }
-                &Insn::Flag => {
+                Insn::Flag => {
                     let fl = stack.pop_flag()?;
                     src.flag(mail.uid, &fl).await?;
                 }
-                &Insn::Halt => break,
-                &Insn::Delete => {
+                Insn::Halt => break,
+                Insn::Delete => {
                     src.delete(mail.uid).await?;
+                    self.src_needs_expunge = true;
                 }
 
                 &Insn::Jump(t) => {
@@ -93,13 +107,11 @@ impl<'i> Closure<'i> {
         Ok(())
     }
 
-    pub(crate) async fn finish(mut self) -> Result<()> {
-        for dest in &mut self.dest_slots {
-            if let Some(dest) = dest {
-                dest.disconnect().await.context("disconnecting")?;
-            }
+    pub(crate) async fn finish(mut self) -> Result<bool> {
+        for slot in self.slots.iter_mut().flatten() {
+            slot.dest.disconnect().await.context("disconnecting")?;
         }
-        Ok(())
+        Ok(self.src_needs_expunge)
     }
 }
 

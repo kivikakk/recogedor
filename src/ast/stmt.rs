@@ -71,7 +71,7 @@ impl Stmt {
             )),
             "do" => Ok(Stmt::Do(
                 vec[1..]
-                    .into_iter()
+                    .iter()
                     .map(Stmt::from_sexp)
                     .collect::<Result<Vec<_>>>()?,
             )),

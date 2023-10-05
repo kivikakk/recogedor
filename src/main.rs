@@ -61,13 +61,16 @@ async fn run(config: &Config, folder: &str) -> Result<()> {
     let mut src = prep_src(&config.src, folder).await?;
 
     loop {
-        let mut closure = config.ir.closure();
+        let mut closure = config.ir.closure(folder);
 
         for mail in src.read().await.context("reading")? {
             closure.process(&mail, &mut src).await?;
         }
 
-        closure.finish().await?;
+        let needs_expunge = closure.finish().await?;
+        if needs_expunge {
+            src.expunge().await?;
+        }
 
         'idle: loop {
             match src.idle().await.context("IDLEing")? {

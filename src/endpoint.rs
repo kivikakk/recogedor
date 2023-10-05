@@ -77,22 +77,23 @@ impl std::convert::TryFrom<&async_imap::types::Fetch> for Message {
 
         let envelope = message.envelope().context("message envelope missing")?;
         let mut recipients = HashSet::new();
-        for list in [&envelope.to, &envelope.cc, &envelope.bcc] {
-            if let Some(list) = list {
-                for addr in list {
-                    recipients.insert(Recipient {
-                        mailbox: addr
-                            .mailbox
-                            .as_ref()
-                            .context("recipient mailbox missing")?
-                            .to_vec(),
-                        host: addr
-                            .host
-                            .as_ref()
-                            .context("recipient host missing")?
-                            .to_vec(),
-                    });
-                }
+        for list in [&envelope.to, &envelope.cc, &envelope.bcc]
+            .into_iter()
+            .flatten()
+        {
+            for addr in list {
+                recipients.insert(Recipient {
+                    mailbox: addr
+                        .mailbox
+                        .as_ref()
+                        .context("recipient mailbox missing")?
+                        .to_vec(),
+                    host: addr
+                        .host
+                        .as_ref()
+                        .context("recipient host missing")?
+                        .to_vec(),
+                });
             }
         }
         Ok(Message {
@@ -131,6 +132,7 @@ pub(crate) trait EndpointReader {
 pub(crate) trait EndpointFlagger {
     async fn flag(&mut self, uid: u32, flag: &str) -> Result<()>;
     async fn delete(&mut self, uid: u32) -> Result<()>;
+    async fn expunge(&mut self) -> Result<()>;
 }
 
 #[async_trait]
@@ -142,7 +144,7 @@ impl<T: EndpointSelector + EndpointReader + EndpointFlagger> SourceEndpoint for 
 
 #[async_trait]
 pub(crate) trait EndpointWriter {
-    async fn append(&mut self, message: &Message) -> Result<()>;
+    async fn append(&mut self, folder: &str, message: &Message) -> Result<()>;
     async fn disconnect(&mut self) -> Result<()>;
 }
 

@@ -66,7 +66,7 @@ impl ImapEndpoint {
     }
 
     pub(crate) async fn connect(&self) -> Result<ImapEndpointClient> {
-        ImapEndpointClient::connect(&self).await
+        ImapEndpointClient::connect(self).await
     }
 }
 
@@ -177,10 +177,10 @@ impl endpoint::EndpointReader for ImapEndpointClient {
 
 #[async_trait]
 impl endpoint::EndpointWriter for ImapEndpointClient {
-    async fn append(&mut self, message: &endpoint::Message) -> Result<()> {
+    async fn append(&mut self, folder: &str, message: &endpoint::Message) -> Result<()> {
         let imap_session = self.imap_session.as_mut().context("no imap session")?;
         info!("[{}] appending message ...", self.name);
-        Ok(imap_session.append("INBOX", &message.body).await?)
+        Ok(imap_session.append(folder, &message.body).await?)
     }
 
     async fn disconnect(&mut self) -> Result<()> {
@@ -203,5 +203,13 @@ impl endpoint::EndpointFlagger for ImapEndpointClient {
 
     async fn delete(&mut self, uid: u32) -> Result<()> {
         self.flag(uid, r"\Deleted").await
+    }
+
+    async fn expunge(&mut self) -> Result<()> {
+        let imap_session = self.imap_session.as_mut().context("no imap session")?;
+        info!("[{}] expunging ...", self.name);
+        let deleted_stream = imap_session.expunge().await?;
+        let _seqnos: Vec<_> = deleted_stream.try_collect().await?;
+        Ok(())
     }
 }

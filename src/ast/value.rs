@@ -40,7 +40,7 @@ impl RecipientPattern {
                 if !Self::parts_equal(p_plus, &recipient.mailbox[r_pluspos + 1..]) {
                     return false;
                 }
-            } else if p_plus.len() != 0 {
+            } else if !p_plus.is_empty() {
                 return false;
             }
         }

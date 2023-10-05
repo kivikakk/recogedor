@@ -17,8 +17,8 @@ impl IR {
         IRCompiler::compile(stmts, dests)
     }
 
-    pub(crate) fn closure(&self) -> Closure {
-        Closure::new(&self)
+    pub(crate) fn closure(&self, folder: &str) -> Closure {
+        Closure::new(self, folder)
     }
 }
 
@@ -26,10 +26,8 @@ impl fmt::Display for IR {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("\n")?;
 
-        let mut ix = 0;
-        for insn in &self.insns {
-            write!(f, "{:02x} {}\n", ix, insn)?;
-            ix += 1;
+        for (ix, insn) in self.insns.iter().enumerate() {
+            writeln!(f, "{:02x} {}", ix, insn)?;
         }
         Ok(())
     }
@@ -121,7 +119,7 @@ impl IRCompiler {
     fn compile_cond(&mut self, cond: &Cond) -> Result<()> {
         match cond {
             Cond::Or(cx) => {
-                if cx.len() == 0 {
+                if cx.is_empty() {
                     bail!("or needs at least one argument");
                 }
 
@@ -188,14 +186,14 @@ impl fmt::Display for Insn {
             Insn::LiteralRecipientPattern(mailbox, plus, host) => {
                 f.write_str("rp\"")?;
                 if let Some(mailbox) = mailbox {
-                    f.write_str(str::from_utf8(&mailbox).unwrap())?;
+                    f.write_str(str::from_utf8(mailbox).unwrap())?;
                 }
                 if let Some(plus) = plus {
-                    write!(f, "+{}", str::from_utf8(&plus).unwrap())?;
+                    write!(f, "+{}", str::from_utf8(plus).unwrap())?;
                 }
                 f.write_str("@")?;
                 if let Some(host) = host {
-                    f.write_str(str::from_utf8(&host).unwrap())?;
+                    f.write_str(str::from_utf8(host).unwrap())?;
                 }
                 f.write_str("\"")?;
                 Ok(())
