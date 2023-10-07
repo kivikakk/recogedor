@@ -86,13 +86,13 @@ impl std::convert::TryFrom<&async_imap::types::Fetch> for Message {
                     mailbox: addr
                         .mailbox
                         .as_ref()
-                        .context("recipient mailbox missing")?
-                        .to_vec(),
+                        .and_then(|at| Some(at.to_vec()))
+                        .unwrap_or(vec![]),
                     host: addr
                         .host
                         .as_ref()
-                        .context("recipient host missing")?
-                        .to_vec(),
+                        .and_then(|at| Some(at.to_vec()))
+                        .unwrap_or(vec![]),
                 });
             }
         }
