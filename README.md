@@ -16,7 +16,7 @@ Cursed IMAP forwarding service.
 Add the repository to your flake inputs:
 
 ```nix
-inputs.recogedor.url = github:charlottia/recogedor;
+inputs.recogedor.url = github:kivikakk/recogedor;
 ```
 
 Add the NixOS module exposed by the flake:
@@ -142,5 +142,5 @@ script = """
 
 # legal
 
-Copyright (c) 2023, Charlotte "charlottia", Asherah Connor.  
+Copyright (c) 2023, Asherah "Charlotte" Connor.  
 Licensed under the [Zero-Clause BSD License](LICENSE.txt).
