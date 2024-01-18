@@ -1,4 +1,4 @@
-# recogedor
+# [recogedor](https://hrzn.ee/kivikakk/recogedor)
 
 Cursed IMAP forwarding service.
 
