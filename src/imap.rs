@@ -121,7 +121,7 @@ impl endpoint::EndpointReader for ImapEndpointClient {
 
         trace!("[{}] started.", self.name);
         let ir = 'idle: loop {
-            let (idle_wait, _interrupt) = idle.wait_with_timeout(Duration::from_secs(10 * 60));
+            let (idle_wait, _interrupt) = idle.wait_with_timeout(Duration::from_secs(1 * 60));
             trace!("[{}] waiting ...", self.name);
 
             match idle_wait.await? {
